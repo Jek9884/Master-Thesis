@@ -53,7 +53,7 @@ def get_best_episodes(dir_path, seed, ckpt, k):
 
     return df
 
-def extract_seed_data(dir_path, save_path, seed, n_ckpt, k):
+def extract_seed_data(dir_path, save_path, game_name, seed, n_ckpt, k):
 
     all_data = pd.DataFrame({'Observation' : [], 'Action' : [], 'Reward' : []})
 
@@ -85,7 +85,7 @@ def extract_seed_data(dir_path, save_path, seed, n_ckpt, k):
             print(f"An error occurred: {e}")
 
     all_data.drop()
-    all_data.to_pickle(f"{save_path}/Seed{seed}.pkl")
+    all_data.to_pickle(f"{save_path}/{game_name}_seed{seed}.pkl")
 
 def extract_all_games_data(dataset_path, save_path, seed, k):
 
@@ -99,7 +99,7 @@ def extract_all_games_data(dataset_path, save_path, seed, k):
     for folder in folders:
 
         dir_path = f"{dataset_path}/{folder}"
-        extract_seed_data(dir_path, save_path, seed, n_ckpt, k)
+        extract_seed_data(dir_path, save_path, folder, seed, n_ckpt, k)
         print(f"{folder} done")
 
 
