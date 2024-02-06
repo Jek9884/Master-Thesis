@@ -6,52 +6,79 @@ import argparse
 
 def get_episodes_idx(dir_path, seed, ckpt):
 
-    filename_term = f"{dir_path}/{seed}/replay_logs/$store$_terminal_ckpt.{ckpt}.gz"
-    pickled_data = gzip.GzipFile(filename=filename_term)
-    np_term = np.load(pickled_data)
-
     episodes_idx = []
 
-    for idx, elem in enumerate(np_term):
-        if elem == 1:
-            episodes_idx.append(idx)
+    try:
+        filename_term = f"{dir_path}/{seed}/replay_logs/$store$_terminal_ckpt.{ckpt}.gz"
+        pickled_data = gzip.GzipFile(filename=filename_term)
+        np_term = np.load(pickled_data)
 
-    return episodes_idx
+        for idx, elem in enumerate(np_term):
+            if elem == 1:
+                episodes_idx.append(idx)
+
+        return episodes_idx
+    
+    except FileNotFoundError:
+        print(f"FIle {filename_term} not found.")
+        return episodes_idx
+    except PermissionError:
+        print(f"Permission error: Unable to read {filename_term}.")
+        return episodes_idx
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return episodes_idx
 
 def get_best_episodes(dir_path, seed, ckpt, k):
 
     idx_lst = get_episodes_idx(dir_path, seed, ckpt)
     
-    filename_obs = f"{dir_path}/{seed}/replay_logs/$store$_observation_ckpt.{ckpt}.gz"
-    pickled_data = gzip.GzipFile(filename=filename_obs)
-    obs = np.load(pickled_data)
-    filename_act = f"{dir_path}/{seed}/replay_logs/$store$_action_ckpt.{ckpt}.gz"
-    pickled_data = gzip.GzipFile(filename=filename_act)
-    act = np.load(pickled_data)
-    filename_rwd = f"{dir_path}/{seed}/replay_logs/$store$_reward_ckpt.{ckpt}.gz"
-    pickled_data = gzip.GzipFile(filename=filename_rwd)
-    rwd = np.load(pickled_data)
+    if len(idx_lst) > 0:
+        try:
+            filename_obs = f"{dir_path}/{seed}/replay_logs/$store$_observation_ckpt.{ckpt}.gz"
+            pickled_data = gzip.GzipFile(filename=filename_obs)
+            obs = np.load(pickled_data)
+            filename_act = f"{dir_path}/{seed}/replay_logs/$store$_action_ckpt.{ckpt}.gz"
+            pickled_data = gzip.GzipFile(filename=filename_act)
+            act = np.load(pickled_data)
+            filename_rwd = f"{dir_path}/{seed}/replay_logs/$store$_reward_ckpt.{ckpt}.gz"
+            pickled_data = gzip.GzipFile(filename=filename_rwd)
+            rwd = np.load(pickled_data)
 
-    data = {
-        'Observation' : [np.array([obs[0:idx_lst[0]+1, :, :]])],
-        'Action' : [np.array([act[0:idx_lst[0]+1]])],
-        'Reward' : [np.array([rwd[0:idx_lst[0]+1]])]
-    }
+            data = {
+                'Observation' : [np.array([obs[0:idx_lst[0]+1, :, :]])],
+                'Action' : [np.array([act[0:idx_lst[0]+1]])],
+                'Reward' : [np.array([rwd[0:idx_lst[0]+1]])]
+            }
 
-    for i in range(1,len(idx_lst)):
-        start = idx_lst[i-1] + 1
-        end = idx_lst[i] + 1
-        data['Observation'].append(obs[start:end, :, :])
-        data['Action'].append(act[start:end])
-        data['Reward'].append(rwd[start:end])
+            for i in range(1,len(idx_lst)):
+                start = idx_lst[i-1] + 1
+                end = idx_lst[i] + 1
+                data['Observation'].append(obs[start:end, :, :])
+                data['Action'].append(act[start:end])
+                data['Reward'].append(rwd[start:end])
 
 
-    df = pd.DataFrame(data)
-    df['Rank'] = df.apply(lambda row: row['Reward'].sum(), axis=1)
-    df = df.sort_values(by='Rank', ascending=False)
-    df = df.head(k)
+            df = pd.DataFrame(data)
+            df['Rank'] = df.apply(lambda row: row['Reward'].sum(), axis=1)
+            df = df.sort_values(by='Rank', ascending=False)
+            df = df.head(k)
 
-    return df
+            return df
+        
+        except FileNotFoundError:
+            print(f"Checkpoint {ckpt} not found.")
+            return pd.DataFrame({"Observation": [], "Action": [], "Reward": []})
+        except PermissionError:
+            print(f"Permission error: Unable to read {ckpt}.")
+            return pd.DataFrame({"Observation": [], "Action": [], "Reward": []})
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return pd.DataFrame({"Observation": [], "Action": [], "Reward": []})
+        
+    else:
+
+        return pd.DataFrame({"Observation": [], "Action": [], "Reward": []})
 
 def extract_seed_data(dir_path, save_path, game_name, seed, n_ckpt, k):
 
@@ -84,7 +111,6 @@ def extract_seed_data(dir_path, save_path, game_name, seed, n_ckpt, k):
         except Exception as e:
             print(f"An error occurred: {e}")
 
-    all_data.drop()
     all_data.to_pickle(f"{save_path}/{game_name}_seed{seed}.pkl")
 
 def extract_all_games_data(dataset_path, save_path, seed, k):
