@@ -3,3 +3,5 @@ dataset_clean
 venv
 videoAutoencoder/__pycache__
 __pycache__
+dataset_{n_ckpt}_{k}_{cut}.pt
+dataset_51_1_100_100.pt
