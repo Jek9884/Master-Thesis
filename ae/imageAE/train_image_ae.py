@@ -26,8 +26,12 @@ device = torch.device(0)
 ray.shutdown()
 ray.init(num_gpus=1)
 
-#file_path = "./dataset_{n_ckpt}_{k}_{cut}.pt"
 images_tensor = torch.load(file_path)
+
+image_tensor = images_tensor[:2]
+
+print(images_tensor.shape)
+
 random.seed(42)
 
 indices = np.arange(len(images_tensor))
@@ -44,10 +48,9 @@ params = {
     'weight_decay' : tune.grid_search([1e-3, 1e-5]),
     'epochs' : tune.grid_search([50, 100]),
     'embedding_dim' : tune.grid_search([128, 256]),
-    'n_channels' : tune.grid_search([1]) 
+    'n_channels' : tune.grid_search([4]),
+    'height' : tune.grid_search([84]),
+    'width' : tune.grid_search([84]),
 }
-
-train_images = train_images[:, np.newaxis, :, :]
-val_images = val_images[:, np.newaxis, :, :]
 
 grid_search(train_images, val_images, params, device, save_path)

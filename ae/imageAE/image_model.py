@@ -10,36 +10,71 @@ import numpy as np
 import os
 import csv
 
-# Define the ImageAutoencoder class
+# N == Input dimension
+# K == Kernel size
+# S == Stride
+# P == Padding
+# OP == Output padding
+# The formula for output dimension after a convolution is ((N-K+2P) / S) + 1
+# The formula for output dimension after a max pooling is ((N-K) / S) + 1
+# The formula for output dimension after a deconvolution is ((N-1)*S)) - (2*P) + K + OP
 class ImageAutoencoder(nn.Module):
-    def __init__(self, n_channels, encoded_size):
+
+    def __init__(self, n_channels, height, width, latent_dim):
         super(ImageAutoencoder, self).__init__()
+        
+        self.conv_kernel = 4
+        self.pool_kernel = 2
+        self.stride = 2
+        self.padding = 1
 
+        #First Conv2D
+        self.height_final_dim = ((height - self.conv_kernel + (2*self.padding)) // self.stride) + 1
+        self.width_final_dim =  ((width - self.conv_kernel + (2*self.padding)) // self.stride) + 1
+        print(f'After first conv: {self.height_final_dim} - {self.width_final_dim}') #42
+        #First MaxPool2D
+        self.height_final_dim = ((self.height_final_dim - self.pool_kernel) // self.stride) + 1
+        self.width_final_dim =  ((self.width_final_dim - self.pool_kernel) // self.stride) + 1
+        print(f'After first max pool: {self.height_final_dim} - {self.width_final_dim}') #21
+        #Second Conv2D
+        self.height_final_dim = ((self.height_final_dim - self.conv_kernel + (2*self.padding)) // self.stride) + 1
+        self.width_final_dim =  ((self.width_final_dim - self.conv_kernel + (2*self.padding)) // self.stride) + 1
+        print(f'After second conv: {self.height_final_dim} - {self.width_final_dim}') #10
+        #Second MaxPool2D
+        self.height_final_dim = ((self.height_final_dim - self.pool_kernel) // self.stride) + 1
+        self.width_final_dim =  ((self.width_final_dim - self.pool_kernel) // self.stride) + 1
+        print(f'After second max pool: {self.height_final_dim} - {self.width_final_dim}') #5
+        #Input dimension for the linear layer
+        self.final_dim = latent_dim * self.height_final_dim * self.width_final_dim
+        print(f'Final dim: {self.final_dim}') #3200
+
+        # Encoder
         self.encoder = nn.Sequential(
-            nn.Conv2d(n_channels, 64, kernel_size=3, padding=1),
+            nn.Conv2d(n_channels, latent_dim // 2, kernel_size=self.conv_kernel, stride=self.stride, padding=self.padding),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(64, encoded_size, kernel_size=3, padding=1),
+            nn.MaxPool2d(kernel_size=self.pool_kernel, stride=self.stride),
+            nn.Conv2d(latent_dim // 2, latent_dim, kernel_size=self.conv_kernel, stride=self.stride, padding=self.padding),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2)
+            nn.MaxPool2d(kernel_size=self.pool_kernel, stride=self.stride),
+            nn.Flatten(),
+            nn.Linear(self.final_dim, latent_dim),
+            nn.ReLU()
         )
 
+        # Decoder
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(encoded_size, 64, kernel_size=3, padding=1),
+            nn.Linear(latent_dim, self.final_dim),
             nn.ReLU(),
-            nn.Upsample(scale_factor=2, mode='nearest'),
-            nn.ConvTranspose2d(64, n_channels, kernel_size=3, padding=1),
+            nn.Unflatten(1, (latent_dim, self.height_final_dim, self.width_final_dim)),
+            nn.Upsample(scale_factor=self.pool_kernel, mode='nearest'),
+            nn.ConvTranspose2d(latent_dim, latent_dim // 2, kernel_size=self.conv_kernel, stride=self.stride, padding=self.padding, output_padding=self.padding),
             nn.ReLU(),
-            nn.Upsample(scale_factor=2, mode='nearest')
+            nn.Upsample(scale_factor=self.pool_kernel, mode='nearest'),
+            nn.ConvTranspose2d(latent_dim // 2, n_channels, kernel_size=self.conv_kernel, stride=self.stride, padding=self.padding, output_padding=0),
+            nn.ReLU()
         )
 
-        """self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(encoded_size, 64, kernel_size=2, stride=2),
-            nn.ReLU(),
-            nn.ConvTranspose2d(64, n_channels, kernel_size=2, stride=2),
-            nn.Sigmoid()
-        )"""
-
+    
     def forward(self, x):
         x = self.encoder(x)
         x = self.decoder(x)
@@ -57,9 +92,6 @@ def train_autoencoder(model, train_dataloader, val_dataloader, criterion, optimi
 
         for data in train_dataloader:
             images = data
-            #for image in images:
-            #    image = image.unsqueeze(0)
-            #images = images[:, np.newaxis, :, :]
             images = images.to(device)
 
             optimizer.zero_grad()
@@ -120,7 +152,7 @@ class CustomImageDataset(Dataset):
         if self.transform:
             image = self.transform(image)
 
-        image = torch.tensor(image, dtype=torch.float32)#.permute(2, 0, 1)
+        image = torch.tensor(image, dtype=torch.float32)
 
         return image
     
@@ -146,13 +178,11 @@ def trainable(config_dict):
 
     torch.cuda.empty_cache()
 
-    model = ImageAutoencoder(config_dict['n_channels'], config_dict['embedding_dim'])
+    model = ImageAutoencoder(config_dict['n_channels'], config_dict['height'], config_dict['width'], config_dict['embedding_dim'])
     model.to(config_dict['device'])
 
     train_data = ray.get(config_dict['train_pt'])
     val_data = ray.get(config_dict['val_pt'])
-    #train_data = config_dict['train_pt']
-    #val_data = config_dict['val_pt']
     train_dataset = CustomImageDataset(train_data)
     val_dataset = CustomImageDataset(val_data)
 
