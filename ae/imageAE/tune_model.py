@@ -103,6 +103,7 @@ def trainable(config_dict):
 parser = argparse.ArgumentParser(description="Train the image autoencoder")
 
 # Define command-line arguments
+parser.add_argument("--device", type=str, help="Device where to execute")
 parser.add_argument("--file_path", type=str, help="Path to the dataset")
 parser.add_argument("--save_path", type = str, help="Path to save results file")
 parser.add_argument("--normalize", type=int, help="Normalize data before computation")
@@ -110,6 +111,7 @@ parser.add_argument("--log_scale", type=int, help="Log scale data before computa
 
 # Parse the command-line arguments
 args = parser.parse_args()
+dev = args.device
 file_path = args.file_path
 save_path = args.save_path
 normalize = args.normalize
@@ -119,7 +121,7 @@ directory = "../../../Master-Thesis"
 save_path = f"{directory}/{save_path}"
 
 # Init raytune
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = dev
 device = torch.device(0)
 
 # Init wandb logger
@@ -150,14 +152,14 @@ params = {
     'lr' : tune.grid_search([1e-3, 1e-5, 1e-7]),
     'eps' : tune.grid_search([1e-8]),
     'weight_decay' : tune.grid_search([1e-1, 1e-3, 1e-5]),
-    'epochs' : tune.grid_search([500]),
-    'embedding_dim' : tune.grid_search([512]),
+    'epochs' : tune.grid_search([300]),
+    'embedding_dim' : tune.grid_search([128, 256, 512]),
     'n_channels' : tune.grid_search([4]),
     'height' : tune.grid_search([84]),
     'width' : tune.grid_search([84]),
     'criterion' : tune.grid_search(['mse']),
     'metric' : tune.grid_search(['mse']),
-    'group_name' : 'Pong_10000_512'
+    'group_name' : 'Alien_10000_small'
 }
 
 grid_search(train_images, val_images, params, device, save_path)
