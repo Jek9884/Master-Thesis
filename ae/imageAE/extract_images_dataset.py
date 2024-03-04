@@ -77,6 +77,8 @@ def process_checkpoint(game_path, seed, ckpt):
     images_tensor = torch.tensor(images_list)
     return images_tensor
 
+final_images_tensor = None
+
 for seed in range(1,n_seed+1):
 
     with ThreadPoolExecutor() as executor:
@@ -85,7 +87,12 @@ for seed in range(1,n_seed+1):
         # Submit tasks to executor
         results = [executor.submit(process_checkpoint, *param) for param in params]
 
-final_images_tensor = torch.cat([future.result() for future in results], dim=0)
+    if final_images_tensor is None:
+        final_images_tensor = torch.cat([future.result() for future in results], dim=0)
+    else:
+        data = torch.cat([future.result() for future in results], dim=0)
+        final_images_tensor = torch.cat((final_images_tensor, data), dim=0)
+
 print(final_images_tensor.shape)
 
 file_path = f"./dataset_{game}_{n_ckpt}_{n_seed}.pt"

@@ -1,7 +1,6 @@
 import gzip
 import numpy as np
-import pandas as pd
-import random
+import torch
 
 def get_episodes_idx(dir_path, seed, ckpt):
 
@@ -28,69 +27,49 @@ def get_episodes_idx(dir_path, seed, ckpt):
         print(f"An error occurred: {e}")
         return episodes_idx
     
-def split_and_save_episodes(obs, act, rwd, idx_lst, k, cut):
-    try:
-        data = {
-            'Observation': [],
-            'Action': [],
-            'Reward': []
-        }
+def normalize_images_tensor(input_tensor):
+    # Reshape the tensor to [n_samples * n_channels, height, width]
+    reshaped_tensor = input_tensor.view(-1, input_tensor.size(2), input_tensor.size(3))
+    reshaped_tensor_float = reshaped_tensor.to(torch.float32)
 
-        for i in range(1, len(idx_lst)):
-            start = idx_lst[i - 1] + 1
-            end = idx_lst[i] + 1
+    # Calculate the mean and standard deviation
+    mean = reshaped_tensor_float.mean(dim=0)
+    stddev = reshaped_tensor_float.std(dim=0)
 
-            if start < len(obs) and end <= len(obs):
-                # Randomly select an element along the 0th axis
-                random_frame = random.randint(start, end - 1)
+    # Avoid division by zero: replace zero std deviations with 1
+    stddev[stddev == 0] = 1.0
 
-                data['Observation'].append(obs[random_frame])
-                data['Action'].append(act[start:cut])
-                data['Reward'].append(rwd[start:cut])
+    # Normalize the tensor by subtracting the mean and dividing by the standard deviation
+    normalized_tensor = (reshaped_tensor_float - mean) / stddev
 
-        df = pd.DataFrame(data)
-        df['Rank'] = df.apply(lambda row: row['Reward'].sum(), axis=1)
-        df = df.sort_values(by='Rank', ascending=False)
-        df = df.head(k)
-
-        return df
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return pd.DataFrame({"Observation": [], "Action": [], "Reward": []})
-
-def get_episodes(dir_path, seed, ckpt, k, cut):
-
-    random.seed(42)
-
-    idx_lst = get_episodes_idx(dir_path, seed, ckpt)
+    # Reshape the normalized tensor back to the original shape
+    normalized_tensor = normalized_tensor.view(input_tensor.size())
     
-    if len(idx_lst) > 0:
-        try:
-            filename_obs = f"{dir_path}/{seed}/replay_logs/$store$_observation_ckpt.{ckpt}.gz"
-            pickled_data = gzip.GzipFile(filename=filename_obs)
-            obs = np.load(pickled_data)
-            filename_act = f"{dir_path}/{seed}/replay_logs/$store$_action_ckpt.{ckpt}.gz"
-            pickled_data = gzip.GzipFile(filename=filename_act)
-            act = np.load(pickled_data)
-            filename_rwd = f"{dir_path}/{seed}/replay_logs/$store$_reward_ckpt.{ckpt}.gz"
-            pickled_data = gzip.GzipFile(filename=filename_rwd)
-            rwd = np.load(pickled_data)
+    return normalized_tensor
 
-            df = split_and_save_episodes(obs, act, rwd, idx_lst, k, cut)
+def scale_images_tensor(input_tensor, min_scale=0.0, max_scale=1.0):
+    # Reshape the tensor to [n_samples * n_channels, height, width]
+    reshaped_tensor = input_tensor.view(-1, input_tensor.size(2), input_tensor.size(3))
+    
+    # Scale the tensor to the desired range
+    scaled_tensor = min_scale + (max_scale - min_scale) * reshaped_tensor
+    
+    # Reshape the scaled tensor back to the original shape
+    scaled_tensor = scaled_tensor.view(input_tensor.size())
+    
+    return scaled_tensor
 
-            return df
-        
-        except FileNotFoundError:
-            print(f"Checkpoint {ckpt} not found.")
-            return pd.DataFrame({"Observation": [], "Action": [], "Reward": []})
-        except PermissionError:
-            print(f"Permission error: Unable to read {ckpt}.")
-            return pd.DataFrame({"Observation": [], "Action": [], "Reward": []})
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return pd.DataFrame({"Observation": [], "Action": [], "Reward": []})
-        
-    else:
+def log_scale_images_tensor(input_tensor, epsilon=1e-5):
+    # Reshape the tensor to [n_samples * n_channels, height, width]
+    reshaped_tensor = input_tensor.view(-1, input_tensor.size(2), input_tensor.size(3))
 
-        return pd.DataFrame({"Observation": [], "Action": [], "Reward": []})
+    # Add a small epsilon to avoid taking the log of zero
+    reshaped_tensor = reshaped_tensor + epsilon
+    
+    # Apply log scaling to the tensor
+    log_scaled_tensor = torch.log(reshaped_tensor)
+    
+    # Reshape the log-scaled tensor back to the original shape
+    log_scaled_tensor = log_scaled_tensor.view(input_tensor.size())
+    
+    return log_scaled_tensor
