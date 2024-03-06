@@ -76,7 +76,7 @@ def train_autoencoder(model, train_dataloader, val_dataloader, criterion, optimi
         #wandb.log({"epoch": epoch, "train_loss": average_train_loss, "val_loss": average_val_loss, "train_metric": average_train_metric, "val_metric": average_val_metric})
 
         #if epoch % 5 == 0:
-        wandb.log({"epoch": epoch, "train_loss": average_train_loss, "val_loss": average_val_loss, "train_metric": average_train_metric, "val_metric": average_val_metric})
-        #train.report({"epoch": epoch, "train_loss": average_train_loss, "val_loss": average_val_loss, "train_metric": average_train_metric, "val_metric": average_val_metric})
+        #wandb.log({"epoch": epoch, "train_loss": average_train_loss, "val_loss": average_val_loss, "train_metric": average_train_metric, "val_metric": average_val_metric})
+        train.report({"epoch": epoch, "train_loss": average_train_loss, "val_loss": average_val_loss, "train_metric": average_train_metric, "val_metric": average_val_metric})
             
     return average_train_loss, average_val_loss, train_loss_vec, val_loss_vec

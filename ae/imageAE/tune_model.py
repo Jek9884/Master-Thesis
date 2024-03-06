@@ -16,12 +16,11 @@ from torch.utils.data import DataLoader
 from train import train_autoencoder
 from data_handler import normalize_images_tensor, scale_images_tensor, log_scale_images_tensor
 
-def grid_search(train, val, params, device, file_path):
+def grid_search(train, val, params, device):
     
     params["train_pt"] = ray.put(train)
     params["val_pt"] = ray.put(val)
     params["device"] = device
-    params["file_path"] = file_path
 
     # Set logs to be shown on the Command Line Interface every 30 seconds
     #reporter = tune.CLIReporter(max_report_frequency=30)
@@ -31,7 +30,7 @@ def grid_search(train, val, params, device, file_path):
                         param_space = params,
                         tune_config = tune.tune_config.TuneConfig(reuse_actors = False),
                         #run_config = air.RunConfig(name="ImageAE", verbose=1, progress_reporter=reporter))
-                        #run_config= air.RunConfig(callbacks=[WandbLoggerCallback(project="Master-Thesis")])
+                        run_config= air.RunConfig(callbacks=[WandbLoggerCallback(project="Master-Thesis")])
                         )
 
     
@@ -40,7 +39,7 @@ def grid_search(train, val, params, device, file_path):
 
 def trainable(config_dict):
 
-    config = {'batch_size' : config_dict['batch_size'], 
+    """config = {'batch_size' : config_dict['batch_size'], 
                'lr' : config_dict['lr'], 
                'eps' : config_dict['eps'], 
                'weight_decay' : config_dict['weight_decay'], 
@@ -48,9 +47,10 @@ def trainable(config_dict):
                'embedding_dim' : config_dict['embedding_dim'], 
                'criterion' : config_dict['criterion'], 
                'device' : config_dict['device'],
-               'metric' : config_dict['metric']}
+               'metric' : config_dict['metric'],
+               'game' :  config_dict['game']}"""
     
-    wandb.init(project="Master-Thesis", group=config_dict['group_name'], config = config)
+    wandb.init(project="Master-Thesis")
     torch.cuda.empty_cache()
 
     model = ImageAutoencoder(config_dict['n_channels'], config_dict['height'], config_dict['width'], config_dict['embedding_dim'])
@@ -83,9 +83,9 @@ def trainable(config_dict):
     
     last_train_loss, last_val_loss, train_loss_vec, val_loss_vec = train_autoencoder(model, train_dataloader, val_dataloader, criterion, optimizer, metric, config_dict['device'], config_dict['epochs'])
 
-    file_path = config_dict['file_path']
+    #file_path = config_dict['file_path']
 
-    print(f"The current directory is: {os.getcwd()}")
+    """print(f"The current directory is: {os.getcwd()}")
 
     if os.path.exists(file_path):
         with open(file_path, 'a', newline='') as csvfile:
@@ -98,14 +98,14 @@ def trainable(config_dict):
             header = ['lr', 'eps', 'weight_decay', 'batch_size', 'epochs', 'embedding_dim', 'n_channels', 'last_train_loss', 'last_val_loss', 'train_loss_vec', 'val_loss_vec']
             csv_writer.writerow(header)
             config_res = [config_dict["lr"], config_dict['eps'], config_dict['weight_decay'], config_dict['batch_size'], config_dict['epochs'], config_dict['embedding_dim'], config_dict['n_channels'], last_train_loss, last_val_loss, train_loss_vec, val_loss_vec]
-            csv_writer.writerow(config_res)
+            csv_writer.writerow(config_res)"""
 
 parser = argparse.ArgumentParser(description="Train the image autoencoder")
 
 # Define command-line arguments
 parser.add_argument("--device", type=str, help="Device where to execute")
 parser.add_argument("--file_path", type=str, help="Path to the dataset")
-parser.add_argument("--save_path", type = str, help="Path to save results file")
+#parser.add_argument("--save_path", type = str, help="Path to save results file")
 parser.add_argument("--normalize", type=int, help="Normalize data before computation")
 parser.add_argument("--log_scale", type=int, help="Log scale data before computation")
 
@@ -113,12 +113,12 @@ parser.add_argument("--log_scale", type=int, help="Log scale data before computa
 args = parser.parse_args()
 dev = args.device
 file_path = args.file_path
-save_path = args.save_path
+#save_path = args.save_path
 normalize = args.normalize
 log_scale = args.log_scale
 
 directory = "../../../Master-Thesis"
-save_path = f"{directory}/{save_path}"
+#save_path = f"{directory}/{save_path}"
 
 # Init raytune
 os.environ["CUDA_VISIBLE_DEVICES"] = dev
@@ -152,17 +152,20 @@ params = {
     'lr' : tune.grid_search([1e-3, 1e-5, 1e-7]),
     'eps' : tune.grid_search([1e-8]),
     'weight_decay' : tune.grid_search([1e-1, 1e-3, 1e-5]),
-    'epochs' : tune.grid_search([300]),
-    'embedding_dim' : tune.grid_search([128, 256, 512]),
+    'epochs' : tune.grid_search([500]),
+    'embedding_dim' : tune.grid_search([512]),
     'n_channels' : tune.grid_search([4]),
     'height' : tune.grid_search([84]),
     'width' : tune.grid_search([84]),
     'criterion' : tune.grid_search(['mse']),
     'metric' : tune.grid_search(['mse']),
-    'group_name' : 'Alien_10000_small'
+    'game' : tune.grid_search(["Pong"]),
+    'n_samples' : tune.grid_search(["10000"]),
+    'model_type' : tune.grid_search(["small"])
+    
 }
 
-grid_search(train_images, val_images, params, device, save_path)
+grid_search(train_images, val_images, params, device)
 
 ray.shutdown()
 wandb.finish()
