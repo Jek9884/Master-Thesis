@@ -3,13 +3,17 @@ import torch
 import os
 import random
 import numpy as np
-from data_handler import log_scale_images_tensor
 from train import train_autoencoder
 from model import ImageAutoencoder
 from imageDataset import ImageDataset
 from torch.utils.data import DataLoader
 import torch.optim as optim
 from torch import nn
+
+import sys
+sys.path.insert(1, 'data_handler')
+from data_handler import normalize_images_tensor, log_scale_images_tensor
+
 
 parser = argparse.ArgumentParser(description="Train the image autoencoder")
 
@@ -71,7 +75,7 @@ images_tensor = images_tensor[:10000, :, :, :]
 
 # Transform data
 if normalize:
-    images_tensor = images_tensor / 255.0
+    images_tensor = normalize_images_tensor(images_tensor)
 if log_scale:
     images_tensor = log_scale_images_tensor(images_tensor)
 

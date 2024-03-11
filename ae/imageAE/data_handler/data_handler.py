@@ -28,24 +28,7 @@ def get_episodes_idx(dir_path, seed, ckpt):
         return episodes_idx
     
 def normalize_images_tensor(input_tensor):
-    # Reshape the tensor to [n_samples * n_channels, height, width]
-    reshaped_tensor = input_tensor.view(-1, input_tensor.size(2), input_tensor.size(3))
-    reshaped_tensor_float = reshaped_tensor.to(torch.float32)
-
-    # Calculate the mean and standard deviation
-    mean = reshaped_tensor_float.mean(dim=0)
-    stddev = reshaped_tensor_float.std(dim=0)
-
-    # Avoid division by zero: replace zero std deviations with 1
-    stddev[stddev == 0] = 1.0
-
-    # Normalize the tensor by subtracting the mean and dividing by the standard deviation
-    normalized_tensor = (reshaped_tensor_float - mean) / stddev
-
-    # Reshape the normalized tensor back to the original shape
-    normalized_tensor = normalized_tensor.view(input_tensor.size())
-    
-    return normalized_tensor
+    return input_tensor / 255.0
 
 def scale_images_tensor(input_tensor, min_scale=0.0, max_scale=1.0):
     # Reshape the tensor to [n_samples * n_channels, height, width]
