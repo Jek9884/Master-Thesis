@@ -56,11 +56,6 @@ parser.add_argument("--n_ckpt", type=int, help="Number of checkpoints to use")
 
 args = parser.parse_args()
 
-# Load dataset 
-#directory = "dataset"
-
-#games = ["AirRaid", "Alien", "IceHockey", "Pong", "SpaceInvaders"]
-
 directory = args.dir
 game = args.game
 n_seed = args.n_seed
