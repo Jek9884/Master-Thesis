@@ -3,7 +3,7 @@ import wandb
 from ray import train
 
 # Define the training function
-def train_autoencoder(model, train_dataloader, val_dataloader, criterion, optimizer, metric, device, num_epochs = 10):
+def train_autoencoder(model, train_dataloader, val_dataloader, criterion, optimizer, metric, device, num_epochs = 10, log = True, save_path = None):
 
     train_loss_vec = []
     val_loss_vec = []
@@ -72,11 +72,12 @@ def train_autoencoder(model, train_dataloader, val_dataloader, criterion, optimi
         average_val_metric = total_val_metric / len(val_dataloader)
         print(f"Epoch [{epoch+1}/{num_epochs}], Val Loss: {average_val_loss}, Val Metric: {average_val_metric}")
 
-        # Log metrics to Weights and Biases
-        #wandb.log({"epoch": epoch, "train_loss": average_train_loss, "val_loss": average_val_loss, "train_metric": average_train_metric, "val_metric": average_val_metric})
+        if log:
+            # Log metrics to Weights and Biases
+            train.report({"epoch": epoch, "train_loss": average_train_loss, "val_loss": average_val_loss, "train_metric": average_train_metric, "val_metric": average_val_metric})
+        
+    # Save the trained model
+    if save_path is not None:
+        torch.save(model.state_dict(), f'{save_path}.pth')
 
-        #if epoch % 5 == 0:
-        #wandb.log({"epoch": epoch, "train_loss": average_train_loss, "val_loss": average_val_loss, "train_metric": average_train_metric, "val_metric": average_val_metric})
-        train.report({"epoch": epoch, "train_loss": average_train_loss, "val_loss": average_val_loss, "train_metric": average_train_metric, "val_metric": average_val_metric})
-            
     return average_train_loss, average_val_loss, train_loss_vec, val_loss_vec
