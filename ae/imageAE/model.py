@@ -1,22 +1,28 @@
-from torch import nn
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import pytorch_lightning as pl
+import numpy as np
+import random
+import wandb
 
-# N == Input dimension
-# K == Kernel size
-# S == Stride
-# P == Padding
-# OP == Output padding
-# The formula for output dimension after a convolution is ((N-K+2P) / S) + 1
-# The formula for output dimension after a max pooling is ((N-K) / S) + 1
-# The formula for output dimension after a deconvolution is ((N-1)*S)) - (2*P) + K + OP
-class ImageAutoencoder(nn.Module):
+class ImageAutoencoder(pl.LightningModule):
 
-    def __init__(self, n_channels, height, width, latent_dim):
+    def __init__(self, n_channels, height, width, latent_dim, loss_fn=F.mse_loss, lr=1e-3, eps=1e-8, weight_decay=0, seed=42):
         super(ImageAutoencoder, self).__init__()
-        
+
+        self.save_hyperparameters()
+
         self.conv_kernel = 4
         self.pool_kernel = 2
         self.stride = 2
         self.padding = 1
+
+        self.total_train_loss = 0
+        self.num_train_batches = 0
+
+        self.total_val_loss = 0
+        self.num_val_batches = 0
 
         #First Conv2D
         self.height_first_conv = ((height - self.conv_kernel + (2*self.padding)) // self.stride) + 1 #42
@@ -101,14 +107,51 @@ class ImageAutoencoder(nn.Module):
             nn.ConvTranspose2d(latent_dim // 2, n_channels, kernel_size=self.conv_kernel, stride=self.stride, padding=self.padding, output_padding=0),
             nn.Sigmoid()
         )
-    
-    def forward(self, x, return_encodings=False):
+
+        self.loss_fn = loss_fn
+
+    def forward(self, x):
         x = self.encoder(x)
-        #print(f"Encoder output size: {x.shape}")
-        if not return_encodings:
-            x = self.decoder(x)
-            #print(f"Decoder output size: {x.shape}")
+        x = self.decoder(x)
         return x
 
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=self.hparams.lr, eps=self.hparams.eps, weight_decay=self.hparams.weight_decay)
 
-    
+    def training_step(self, batch, batch_idx):
+        x = batch
+        output = self(x)
+        loss = self.loss_fn(output, x)
+        self.total_train_loss += loss
+        self.num_train_batches += 1
+        #self.log('train_loss', loss, on_step=False, on_epoch=True)
+        #wandb.log({"train_loss": loss.item()})
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        x = batch
+        x_hat = self(x)
+        loss = self.loss_fn(x_hat, x)
+        self.total_val_loss += loss
+        self.num_val_batches += 1
+        #self.log('val_loss', loss, on_step=False, on_epoch=True)
+        #wandb.log({"val_loss": loss.item()})
+
+    def test_step(self, batch, batch_idx):
+        x = batch
+        output = self(x)
+        loss = self.loss_fn(output, x)
+        #self.log('test_loss', loss, on_step=False, on_epoch=True)
+        #wandb.log({"test_loss": loss.item()})
+
+    def on_train_epoch_end(self):
+        # Calcola la media della loss
+        avg_train_loss = self.total_train_loss / self.num_train_batches
+
+        wandb.log({"train_loss": avg_train_loss.item()})
+
+    def on_validation_epoch_end(self):
+        # Calcola la media della loss
+        avg_val_loss = self.total_val_loss / self.num_val_batches
+
+        wandb.log({"val_loss": avg_val_loss.item()})

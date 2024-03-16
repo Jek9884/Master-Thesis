@@ -1,72 +1,50 @@
-import numpy as np
-import ray
-from ray import tune, air
-from ray.air.integrations.wandb import WandbLoggerCallback
-import os
-import torch
-import random
+import pytorch_lightning as pl
 import argparse
+import torch
+import os
+from ray import tune
+import ray
 import wandb
+from ray.air.config import RunConfig
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+
 from model import ImageAutoencoder
-from nature_model import NatureAE
-from torch import nn
-import torch.optim as optim
-from imageDataset import ImageDataset
-from torch.utils.data import DataLoader
-from train import train_autoencoder
-from data_handler import normalize_images_tensor, log_scale_images_tensor
+from imageDataset import ImageDataModule
+from kfoldTrainer import KFoldTrainer
 
-def grid_search(train, val, params, device):
-    
-    params["train_pt"] = ray.put(train)
-    params["val_pt"] = ray.put(val)
-    params["device"] = device
-
-    # Starts grid search using RayTune
-    tuner = tune.Tuner(tune.with_resources(trainable, {"cpu":2, "gpu":1}),
-                        param_space = params,
-                        tune_config = tune.tune_config.TuneConfig(reuse_actors = False),
-                        run_config= air.RunConfig(callbacks=[WandbLoggerCallback(project="Master-Thesis")])
-                        )
-
-    
-    tuner.fit()
-
+import sys
+sys.path.insert(1, '/storagenfs/a.capurso1/Master-Thesis/ae/lightning_version/data_handler')
+from utilities import normalize_images_tensor, log_scale_images_tensor
 
 def trainable(config_dict):
     
-    wandb.init(project="Master-Thesis")
-    torch.cuda.empty_cache()
+    seed = 42
+    pl.seed_everything(seed, workers=True)
 
-    model = ImageAutoencoder(config_dict['n_channels'], config_dict['height'], config_dict['width'], config_dict['embedding_dim'])
-    model.to(config_dict['device'])
+    images_tensor = ray.get(config_dict['data_pt'])
 
-    train_data = ray.get(config_dict['train_pt'])
-    val_data = ray.get(config_dict['val_pt'])
-    train_dataset = ImageDataset(train_data)
-    val_dataset = ImageDataset(val_data)
+    if config_dict['normalize']:
+        images_tensor = normalize_images_tensor(images_tensor)
+    if config_dict['log_scale']:
+        images_tensor = log_scale_images_tensor(images_tensor)
 
-    train_dataloader = DataLoader(train_dataset, batch_size=config_dict['batch_size'], shuffle=True, num_workers=4)
-    val_dataloader = DataLoader(val_dataset, batch_size=config_dict['batch_size'], shuffle=True, num_workers=4)
+    # Initialize Weights & Biases run
+    wandb.init(project="Master-Thesis", config=config_dict)
 
-    if config_dict['criterion'] == 'mse':
-        criterion = nn.MSELoss()
-    elif config_dict['criterion'] == 'cross_entropy':
-        criterion = nn.CrossEntropyLoss()
-    else:
-        criterion = nn.MSELoss()
+    # Define the model
+    model = ImageAutoencoder(n_channels=config_dict['n_channels'], height=config_dict['height'], width=config_dict['width'], latent_dim=config_dict['embedding_dim'], lr=config_dict['lr'], weight_decay=config_dict['weight_decay'], eps=config_dict['eps'])
 
-    if config_dict['metric'] == 'mae':
-        metric = nn.L1Loss()
-    else:
-        metric = nn.MSELoss()
+    early_stopping_callback = EarlyStopping(
+        monitor="val_loss",
+        patience=5,
+        mode="min",
+    )
 
-    optimizer = optim.Adam(model.parameters(), 
-                           lr=config_dict['lr'],
-                           eps = config_dict['eps'],
-                           weight_decay = config_dict['weight_decay'])
-    
-    last_train_loss, last_val_loss, train_loss_vec, val_loss_vec = train_autoencoder(model, train_dataloader, val_dataloader, criterion, optimizer, metric, config_dict['device'], config_dict['epochs'])
+    # Define a Lightning Trainer
+    trainer = KFoldTrainer(max_epochs=config_dict['epochs'], num_folds=5, enable_progress_bar=True, deterministic = True, callbacks=[early_stopping_callback])
+    trainer.fit(model, datamodule=ImageDataModule(images_tensor, batch_size=config_dict['batch_size'], num_workers=10))
+
+    wandb.finish()
 
 parser = argparse.ArgumentParser(description="Train the image autoencoder")
 
@@ -83,54 +61,50 @@ file_path = args.file_path
 normalize = args.normalize
 log_scale = args.log_scale
 
-directory = "../../../Master-Thesis"
+seed = 42
+pl.seed_everything(seed, workers=True)
+
+images_tensor = torch.load(file_path)
+#images_tensor = images_tensor[:10000, :, :, :]
 
 os.environ["CUDA_VISIBLE_DEVICES"] = dev
 device = torch.device(0)
 
-# Init raytune
+# Configure Ray Tune
 ray.shutdown()
-ray.init(num_gpus=1)
+ray.init()
 
-images_tensor = torch.load(file_path)
+data_pt = ray.put(images_tensor)
 
-#images_tensor = images_tensor[:10000, :, :, :]
-
-if normalize:
-    images_tensor = normalize_images_tensor(images_tensor)
-if log_scale:
-    images_tensor = log_scale_images_tensor(images_tensor)
-
-# Split data in train and validation set
-random.seed(42)
-indices = np.arange(len(images_tensor))
-np.random.shuffle(indices)
-split_idx = int(0.8 * len(images_tensor))
-train_idx, val_idx = indices[:split_idx], indices[split_idx:]
-train_images, val_images = images_tensor[train_idx], images_tensor[val_idx]
-
-# Grid search parameters
-params = {
-    'batch_size' : tune.grid_search([32]),
+# Define the search space
+search_space = {
+    'data_pt' : data_pt,
+    'batch_size' : tune.grid_search([32, 64, 128]),
     'lr' : tune.grid_search([1e-3, 1e-5, 1e-7]),
     'eps' : tune.grid_search([1e-8]),
-    'weight_decay' : tune.grid_search([1e-1, 1e-3, 1e-5]),
-    'epochs' : tune.grid_search([300]),
-    'embedding_dim' : tune.grid_search([128, 256, 512]),
+    'weight_decay' : tune.grid_search([1e-3, 1e-5, 1e-7]),
+    'epochs' : tune.grid_search([500]),
+    'embedding_dim' : tune.grid_search([128]),
     'n_channels' : tune.grid_search([4]),
     'height' : tune.grid_search([84]),
     'width' : tune.grid_search([84]),
     'criterion' : tune.grid_search(['mse']),
     'metric' : tune.grid_search(['mse']),
-    'game' : tune.grid_search(["Alien"]),
-    'n_samples' : tune.grid_search(["56833"]),
+    'game' : tune.grid_search(["Pong"]),
+    'n_samples' : tune.grid_search([images_tensor.shape[0]]),
     'model_type' : tune.grid_search(["small"]),
-    'normalize' : tune.grid_search([normalize]),
-    'log_scale' : tune.grid_search([log_scale])
+    'normalize' : tune.grid_search([1]),
+    'log_scale' : tune.grid_search([0]),
+    'seed' : tune.grid_search([seed])
 }
 
-grid_search(train_images, val_images, params, device)
+tuner = tune.Tuner(tune.with_resources(trainable, 
+                                       {"cpu":10,"gpu":0.5},
+                                       ),
+                    param_space = search_space,
+                    run_config = RunConfig(name="game", verbose=1)
+                    )
+
+results = tuner.fit()
 
 ray.shutdown()
-wandb.finish()
-

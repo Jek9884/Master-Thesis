@@ -5,12 +5,8 @@ from imageDataset import ImageDataset
 from torch.utils.data import DataLoader
 import numpy as np
 
-import sys
-sys.path.insert(1, '..')
 from model import ImageAutoencoder
-import sys
-sys.path.insert(1, 'data_handler')
-from data_handler.data_handler import normalize_images_tensor, log_scale_images_tensor
+from utilities import normalize_images_tensor, log_scale_images_tensor
 
 parser = argparse.ArgumentParser(description="Test the image autoencoder")
 
