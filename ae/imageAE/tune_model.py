@@ -78,6 +78,7 @@ ray.init()
 
 data_pt = ray.put(images_tensor)
 
+game = "SpaceInvaders"
 
 # Define the search space
 search_space = {
@@ -93,7 +94,7 @@ search_space = {
     'width' : tune.grid_search([84]),
     'criterion' : tune.grid_search(['mse']),
     'metric' : tune.grid_search(['mse']),
-    'game' : tune.grid_search(["SpaceInvaders"]),
+    'game' : tune.grid_search([game]),
     'patience' : tune.grid_search([5, 10]),
     'divergence_threshold' : tune.grid_search([1e-6]),
     'n_samples' : tune.grid_search([images_tensor.shape[0]]),
@@ -107,7 +108,7 @@ tuner = tune.Tuner(tune.with_resources(trainable,
                                        {"cpu":10,"gpu":0.5},
                                        ),
                     param_space = search_space,
-                    run_config = RunConfig(name="game", verbose=1)
+                    run_config = RunConfig(name=game, verbose=1)
                 )
 
 results = tuner.fit()
