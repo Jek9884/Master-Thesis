@@ -148,10 +148,14 @@ class ImageAutoencoder(pl.LightningModule):
         # Calcola la media della loss
         avg_train_loss = self.total_train_loss / self.num_train_batches
 
-        wandb.log({"train_loss": avg_train_loss.item()})
+        self.log("train_loss", avg_train_loss.item())
+        print(f"Epoch [{self.current_epoch}/{self.trainer.max_epochs}], Train loss: {avg_train_loss}")
+        #wandb.log({"train_loss": avg_train_loss.item()})
 
     def on_validation_epoch_end(self):
         # Calcola la media della loss
         avg_val_loss = self.total_val_loss / self.num_val_batches
 
-        wandb.log({"val_loss": avg_val_loss.item()})
+        self.log("val_loss", avg_val_loss.item())
+        print(f"Epoch [{self.current_epoch}/{self.trainer.max_epochs}], Val loss: {avg_val_loss}")
+        #wandb.log({"val_loss": avg_val_loss.item()})

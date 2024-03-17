@@ -7,6 +7,7 @@ import ray
 import wandb
 from ray.air.config import RunConfig
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.loggers.wandb import WandbLogger
 
 from model import ImageAutoencoder
 from imageDataset import ImageDataModule
@@ -29,19 +30,20 @@ def trainable(config_dict):
         images_tensor = log_scale_images_tensor(images_tensor)
 
     # Initialize Weights & Biases run
-    wandb.init(project="Master-Thesis", config=config_dict)
+    #wandb.init(project="Master-Thesis", config=config_dict)
 
     # Define the model
     model = ImageAutoencoder(n_channels=config_dict['n_channels'], height=config_dict['height'], width=config_dict['width'], latent_dim=config_dict['embedding_dim'], lr=config_dict['lr'], weight_decay=config_dict['weight_decay'], eps=config_dict['eps'])
 
     early_stopping_callback = EarlyStopping(
         monitor="val_loss",
-        patience=5,
-        mode="min",
+        patience=config_dict["patience"],
+        mode="min"
     )
 
+    wandb_logger = WandbLogger(project="Master-Thesis", config=config_dict)
     # Define a Lightning Trainer
-    trainer = KFoldTrainer(max_epochs=config_dict['epochs'], num_folds=5, enable_progress_bar=True, deterministic = True, callbacks=[early_stopping_callback])
+    trainer = KFoldTrainer(max_epochs=config_dict['epochs'], num_folds=3, deterministic = True, enable_progress_bar = False, logger=wandb_logger, callbacks=[early_stopping_callback])
     trainer.fit(model, datamodule=ImageDataModule(images_tensor, batch_size=config_dict['batch_size'], num_workers=10))
 
     wandb.finish()
@@ -76,6 +78,7 @@ ray.init()
 
 data_pt = ray.put(images_tensor)
 
+
 # Define the search space
 search_space = {
     'data_pt' : data_pt,
@@ -90,7 +93,9 @@ search_space = {
     'width' : tune.grid_search([84]),
     'criterion' : tune.grid_search(['mse']),
     'metric' : tune.grid_search(['mse']),
-    'game' : tune.grid_search(["Pong"]),
+    'game' : tune.grid_search(["SpaceInvaders"]),
+    'patience' : tune.grid_search([5, 10]),
+    'divergence_threshold' : tune.grid_search([1e-6]),
     'n_samples' : tune.grid_search([images_tensor.shape[0]]),
     'model_type' : tune.grid_search(["small"]),
     'normalize' : tune.grid_search([1]),
@@ -103,7 +108,7 @@ tuner = tune.Tuner(tune.with_resources(trainable,
                                        ),
                     param_space = search_space,
                     run_config = RunConfig(name="game", verbose=1)
-                    )
+                )
 
 results = tuner.fit()
 
