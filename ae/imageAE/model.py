@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import pytorch_lightning as pl
+from lightning import LightningModule
 import numpy as np
 import random
 import wandb
 
-class ImageAutoencoder(pl.LightningModule):
+class ImageAutoencoder(LightningModule):
 
     def __init__(self, n_channels, height, width, latent_dim, loss_fn=F.mse_loss, lr=1e-3, eps=1e-8, weight_decay=0, seed=42):
         super(ImageAutoencoder, self).__init__()

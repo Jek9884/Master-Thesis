@@ -1,4 +1,3 @@
-import pytorch_lightning as pl
 import argparse
 import torch
 import os
@@ -6,8 +5,10 @@ from ray import tune
 import ray
 import wandb
 from ray.air.config import RunConfig
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.loggers.wandb import WandbLogger
+from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+from lightning.pytorch.loggers import WandbLogger
+from ray.air.integrations.wandb import setup_wandb
+from lightning import seed_everything
 
 from model import ImageAutoencoder
 from imageDataset import ImageDataModule
@@ -17,10 +18,12 @@ import sys
 sys.path.insert(1, '/storagenfs/a.capurso1/Master-Thesis/ae/lightning_version/data_handler')
 from utilities import normalize_images_tensor, log_scale_images_tensor
 
+os.environ["WANDB__SERVICE_WAIT"] = "600"
+
 def trainable(config_dict):
     
     seed = 42
-    pl.seed_everything(seed, workers=True)
+    seed_everything(seed, workers=True)
 
     images_tensor = ray.get(config_dict['data_pt'])
 
@@ -30,7 +33,7 @@ def trainable(config_dict):
         images_tensor = log_scale_images_tensor(images_tensor)
 
     # Initialize Weights & Biases run
-    #wandb.init(project="Master-Thesis", config=config_dict)
+    wandb.init(project="Master-Thesis", name = ray.train.get_context().get_trial_name(), config=config_dict)
 
     # Define the model
     model = ImageAutoencoder(n_channels=config_dict['n_channels'], height=config_dict['height'], width=config_dict['width'], latent_dim=config_dict['embedding_dim'], lr=config_dict['lr'], weight_decay=config_dict['weight_decay'], eps=config_dict['eps'])
@@ -40,8 +43,13 @@ def trainable(config_dict):
         patience=config_dict["patience"],
         mode="min"
     )
+    
+    #run = setup_wandb(project="Master-Thesis", name=ray.train.get_context().get_trial_name())
 
-    wandb_logger = WandbLogger(project="Master-Thesis", config=config_dict)
+    #wandb_logger = WandbLogger(job_type='train', name=run.name, id=run.id, save_dir=run.dir, config=config_dict, run=run)
+
+    wandb_logger = WandbLogger(project="Master-Thesis", config=config_dict, settings=wandb.Settings(start_method="fork"))
+
     # Define a Lightning Trainer
     trainer = KFoldTrainer(max_epochs=config_dict['epochs'], num_folds=3, deterministic = True, enable_progress_bar = False, logger=wandb_logger, callbacks=[early_stopping_callback])
     trainer.fit(model, datamodule=ImageDataModule(images_tensor, batch_size=config_dict['batch_size'], num_workers=10))
@@ -64,7 +72,7 @@ normalize = args.normalize
 log_scale = args.log_scale
 
 seed = 42
-pl.seed_everything(seed, workers=True)
+seed_everything(seed, workers=True)
 
 images_tensor = torch.load(file_path)
 #images_tensor = images_tensor[:10000, :, :, :]
@@ -78,15 +86,15 @@ ray.init()
 
 data_pt = ray.put(images_tensor)
 
-game = "SpaceInvaders"
+game = "SpaceInvaders" #IceHockey, Pong, Alien, SpaceInvaders
 
 # Define the search space
 search_space = {
     'data_pt' : data_pt,
-    'batch_size' : tune.grid_search([32, 64, 128]),
-    'lr' : tune.grid_search([1e-3, 1e-5, 1e-7]),
+    'batch_size' : tune.grid_search([32]),
+    'lr' : tune.grid_search([1e-5]),
     'eps' : tune.grid_search([1e-8]),
-    'weight_decay' : tune.grid_search([1e-3, 1e-5, 1e-7]),
+    'weight_decay' : tune.grid_search([1e-7]),
     'epochs' : tune.grid_search([500]),
     'embedding_dim' : tune.grid_search([128]),
     'n_channels' : tune.grid_search([4]),
@@ -95,8 +103,8 @@ search_space = {
     'criterion' : tune.grid_search(['mse']),
     'metric' : tune.grid_search(['mse']),
     'game' : tune.grid_search([game]),
-    'patience' : tune.grid_search([5, 10]),
-    'divergence_threshold' : tune.grid_search([1e-6]),
+    'patience' : tune.grid_search([5]),
+    'divergence_threshold' : tune.grid_search([1e-5]),
     'n_samples' : tune.grid_search([images_tensor.shape[0]]),
     'model_type' : tune.grid_search(["small"]),
     'normalize' : tune.grid_search([1]),

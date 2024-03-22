@@ -1,6 +1,6 @@
-import pytorch_lightning as pl
+from lightning import Trainer
 
-class KFoldTrainer(pl.Trainer):
+class KFoldTrainer(Trainer):
     def __init__(self, *args, num_folds=5, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_folds = num_folds

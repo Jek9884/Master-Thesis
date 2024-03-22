@@ -1,8 +1,8 @@
 import numpy as np
 from torch.utils.data import Dataset, DataLoader, Subset
-import pytorch_lightning as pl
+from lightning import LightningDataModule
 
-class ImageDataModule(pl.LightningDataModule):
+class ImageDataModule(LightningDataModule):
     def __init__(self, images_list, batch_size=32, num_folds=5, num_workers=0, seed=None):
         super().__init__()
         self.images_list = images_list
