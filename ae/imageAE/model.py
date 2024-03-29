@@ -110,9 +110,11 @@ class ImageAutoencoder(LightningModule):
 
         self.loss_fn = loss_fn
 
-    def forward(self, x):
+    def forward(self, x, return_encodings=False):
         x = self.encoder(x)
-        x = self.decoder(x)
+        if not return_encodings:
+            x = self.decoder(x)
+            
         return x
 
     def configure_optimizers(self):

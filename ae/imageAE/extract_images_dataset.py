@@ -1,6 +1,6 @@
 import torch
 from concurrent.futures import ThreadPoolExecutor
-from data_handler import get_episodes_idx
+from utilities import get_episodes_idx
 import argparse
 import gzip
 import numpy as np

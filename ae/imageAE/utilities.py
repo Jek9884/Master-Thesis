@@ -1,6 +1,10 @@
 import gzip
 import numpy as np
 import torch
+import os
+from model import ImageAutoencoder
+from imageDataset import ImageDataset
+from torch.utils.data import DataLoader
 
 def get_episodes_idx(dir_path, seed, ckpt):
 
@@ -18,7 +22,7 @@ def get_episodes_idx(dir_path, seed, ckpt):
         return episodes_idx
     
     except FileNotFoundError:
-        print(f"FIle {filename_term} not found.")
+        print(f"File {filename_term} not found.")
         return episodes_idx
     except PermissionError:
         print(f"Permission error: Unable to read {filename_term}.")
@@ -56,3 +60,38 @@ def log_scale_images_tensor(input_tensor, epsilon=1e-5):
     log_scaled_tensor = log_scaled_tensor.view(input_tensor.size())
     
     return log_scaled_tensor
+
+def extract_embeddings(images_tensor, dev, model_path, normalize, log_scale, num_workers=20):
+    
+    os.environ["CUDA_VISIBLE_DEVICES"] = dev
+    device = torch.device(0)
+
+    if normalize:
+        images_tensor = normalize_images_tensor(images_tensor)
+    if log_scale:
+        images_tensor = log_scale_images_tensor(images_tensor)
+
+    model = ImageAutoencoder.load_from_checkpoint(model_path)
+    model.to(device)
+
+    images_dataset = ImageDataset(images_tensor)
+    images_dataloader = DataLoader(images_dataset, batch_size=1, shuffle=False, num_workers=num_workers)
+
+    embeddings_list = []
+    model.eval()
+
+    with torch.no_grad():
+
+        for data in images_dataloader:
+            images = data
+            images = images.to(device)
+
+            #Forward pass
+            embeddings = model(images, return_encodings=True)
+
+            embeddings_list.append(embeddings.cpu())
+
+    # Cast list in tensor and save it
+    embeddings_torch = torch.cat(embeddings_list, dim=0)
+    
+    return embeddings_torch

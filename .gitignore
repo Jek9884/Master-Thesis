@@ -10,4 +10,5 @@ ae/final_models
 ae/imageAE/images_dataset
 ae/imageAE/lightning_logs
 ae/legacy
-ae/final_models
+ae/imageAE/final_models
+similarity_dataset
