@@ -55,13 +55,21 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as executor:
         else:
             final_df = pd.concat([final_df, result_df], ignore_index=True)
 
-images_list = final_df["Observation"]
+filtered_df = final_df[final_df["Observation"].apply(lambda x: x.shape[0] == 4)].copy()
+
+images_list = filtered_df["Observation"]
+
 images_tensor = [torch.tensor(arr) for arr in images_list]
 images_tensor = torch.stack(images_tensor)
 
 embeddings = extract_embeddings(images_tensor, device, model_path, normalize, log_scale)
 
-final_df["Observation"] = embeddings.tolist()
+print(images_tensor.shape)
+print(embeddings.shape)
+print(len(embeddings.tolist()))
+print(len(filtered_df["Observation"].to_list()))
+
+filtered_df["Observation"] = embeddings.tolist()
 
 #final_df.to_csv(f'{save_path}/{game}.csv', index=False, sep=';')
-final_df.to_pickle(f'{save_path}/{game}.pkl')
+filtered_df.to_pickle(f'{save_path}/{game}.pkl')
