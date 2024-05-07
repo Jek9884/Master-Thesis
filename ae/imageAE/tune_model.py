@@ -86,15 +86,15 @@ ray.init()
 
 data_pt = ray.put(images_tensor)
 
-game = "AirRaid" #IceHockey, Pong, Alien, SpaceInvaders, AirRaid
+game = "Full" #IceHockey, Pong, Alien, SpaceInvaders, AirRaid
 
 # Define the search space
 search_space = {
     'data_pt' : data_pt,
-    'batch_size' : tune.grid_search([64]),
-    'lr' : tune.grid_search([1e-3]),
+    'batch_size' : tune.grid_search([32, 64, 128]),
+    'lr' : tune.grid_search([1e-3, 1e-5, 1e-7]),
     'eps' : tune.grid_search([1e-8]),
-    'weight_decay' : tune.grid_search([1e-7]),
+    'weight_decay' : tune.grid_search([1e-3, 1e-5, 1e-7]),
     'epochs' : tune.grid_search([1000]),
     'embedding_dim' : tune.grid_search([128]),
     'n_channels' : tune.grid_search([4]),
@@ -113,7 +113,7 @@ search_space = {
 }
 
 tuner = tune.Tuner(tune.with_resources(trainable, 
-                                       {"cpu":10,"gpu":1},
+                                       {"cpu":10,"gpu":0.5},
                                        ),
                     param_space = search_space,
                     run_config = RunConfig(name=game, verbose=1)

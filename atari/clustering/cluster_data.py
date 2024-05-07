@@ -29,7 +29,7 @@ def load_data(desc_flag, max_token_length=256, cut=512):
     data = None
 
     for game in games:
-        file_path = f"./similarity_dataset/{game}.pkl"
+        file_path = f"../similarity_dataset/{game}.pkl"
         game_data = pd.read_pickle(file_path)
         if game == "Alien":
             text = "In Alien, players take on the role of a lone astronaut stranded aboard a space station infested with deadly aliens. \
@@ -112,7 +112,7 @@ def apply_kmeans(data, column, n_clusters, file_path, filename, data_type):
 
     # Fit KMeans clustering
     num_clusters = n_clusters
-    kmeans = KMeans(n_clusters=num_clusters)
+    kmeans = KMeans(n_clusters=num_clusters, random_state=42)
     kmeans.fit(X)
 
     # Calculate silhouette score
@@ -331,8 +331,6 @@ def exec_combo(data, column, directory, data_type, normalization_type, n_cluster
     if not os.path.exists(filepath):
         os.makedirs(filepath)
         print(f"Directory '{filepath}' created successfully")
-    
-    #filename = filepath.replace("/", "_")
 
     #Apply kmeans
     if not os.path.exists(f'{filepath}/kmeans'):
@@ -381,10 +379,11 @@ def extract_k_principal_components(data, column, new_col, k):
 
     data[new_col] = principal_components.tolist()
 
+
 parser = argparse.ArgumentParser(description="Cluster data")
 
 # Define command-line arguments
-parser.add_argument("--description_type", type=int, help="String indicating the type of description to use (0 description tokenized, 1 description BERT CLS, 2 description BERT embeddings)")
+parser.add_argument("--description_type", type=int, help="Int value indicating the type of description to use (0 description tokenized, 1 description BERT CLS, 2 description BERT embeddings)")
 
 args = parser.parse_args()
 description_type = args.description_type
@@ -408,42 +407,53 @@ if not os.path.exists(directory):
     os.makedirs(directory)
     print(f"Directory '{directory}' created successfully")
 
+
 # Only embeddings, no normalization
-exec_combo(data, 'Observation', directory, 0, 0, 5)
+exec_combo(data, 'Observation', directory, 0, 0, n_clusters=5)
+print("only emb done")
 
 # Embeddings concat to dataset, no normalization
 data['Features'] = data.apply(lambda r: concatenate_elements(data, r), axis=1)
 data['Features'] = data['Features'].apply(lambda x: np.array(x))
-exec_combo(data, 'Features', directory, 1, 0, 4)
+exec_combo(data, 'Features', directory, 1, 0, n_clusters=5)
+print("concat no norm done")
 
 # Embeddings concat to dataset, min-max scaling
 apply_minmax(data, 'Features', 'Features_minmax')
-exec_combo(data, 'Features_minmax', directory, 1, 1, 4)
+exec_combo(data, 'Features_minmax', directory, 1, 1, n_clusters=5)
+print("concat minmax done")
 
 # Embeddings concat to dataset, z-score scaling
 apply_zscore(data, 'Features', 'Features_zscore')
-exec_combo(data, 'Features_zscore', directory, 1, 2, 4)
+exec_combo(data, 'Features_zscore', directory, 1, 2, n_clusters=5)
+print("concat zscore done")
 
 # 90 principal components, no normalization
 extract_k_principal_components(data, 'Features', '90_pc', 214)
-exec_combo(data, '90_pc', directory, 2, 0, 4, 90)
+exec_combo(data, '90_pc', directory, 2, 0, n_clusters=5, k_pc=90)
+print("90pc no norm done")
 
 # 90 principal components, min-max scaling
 apply_minmax(data, '90_pc', '90_pc_minmax')
-exec_combo(data, '90_pc_minmax', directory, 2, 1, 5, 90)
+exec_combo(data, '90_pc_minmax', directory, 2, 1, n_clusters=5, k_pc=90)
+print("90pc minmax done")
 
 # 90 principal components, z-score scaling
 apply_zscore(data, '90_pc', '90_pc_zscore')
-exec_combo(data, '90_pc_zscore', directory, 2, 2, 5, 90)
+exec_combo(data, '90_pc_zscore', directory, 2, 2, n_clusters=5, k_pc=90)
+print("90pc zscore done")
 
 # 80 principal components, no normalization
 extract_k_principal_components(data, 'Features', '80_pc', 51)
-exec_combo(data, '80_pc', directory, 2, 0, 4, 80)
+exec_combo(data, '80_pc', directory, 2, 0, n_clusters=5, k_pc=80)
+print("80pc no norm done")
 
 # 80 principal components, min-max scaling
 apply_minmax(data, '80_pc', '80_pc_minmax')
-exec_combo(data, '80_pc_minmax', directory, 2, 1, 5, 80)
+exec_combo(data, '80_pc_minmax', directory, 2, 1, n_clusters=5, k_pc=80)
+print("80pc minmax done")
 
 # 80 principal components, z-score scaling
 apply_zscore(data, '80_pc', '80_pc_zscore')
-exec_combo(data, '80_pc_zscore', directory, 2, 2, 4, 80)
+exec_combo(data, '80_pc_zscore', directory, 2, 2, n_clusters=5, k_pc=80)
+print("80pc zscore done")
