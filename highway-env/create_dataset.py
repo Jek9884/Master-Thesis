@@ -9,7 +9,7 @@ import pickle
 import argparse
 import os
 import cv2
-
+import time
 
 def read_video_frames(video_path):
     # Open the video file
@@ -49,12 +49,11 @@ def delete_file(file_path):
 parser = argparse.ArgumentParser(description="Create episodes for the specified env")
 
 # Define command-line arguments
-parser.add_argument("--device", type=str, help="GPU to use")
+parser.add_argument("--device", type=str, default='cpu', help="GPU to use")
 parser.add_argument("--env_name", type=str, help="Environment to use")
 parser.add_argument("--policy_path", type=str, help="Path to trained policy")
 parser.add_argument("--n_episodes", type=int, help="Number of episodes to perform")
 parser.add_argument("--filename", type=str, help="Filename for saving episodes")
-
 
 args = parser.parse_args()
 device = args.device
@@ -63,7 +62,9 @@ policy_path = args.policy_path
 n_episodes = args.n_episodes
 filename = args.filename
 
-os.environ["CUDA_VISIBLE_DEVICES"] = device
+if device != 'cpu':
+    os.environ["CUDA_VISIBLE_DEVICES"] = device
+
 device = torch.device(0)
 
 directory = "./dataset"
@@ -114,7 +115,8 @@ episodes_list = {
 
 count = 0
 
-for _ in range(n_episodes):
+start_time = time.time()
+for i in range(n_episodes):
 
     obs, _ = env.reset()
 
@@ -137,7 +139,7 @@ for _ in range(n_episodes):
             break
     
     # Get last four frames from the created video
-    videoname = f'{directory}/rl-video-episode-{count}'
+    videoname = f'{directory}/rl-video-episode-{i}'
     episodes_list['Observation'].append(read_video_frames(f'{videoname}.mp4'))
 
     # Delete video files
@@ -149,7 +151,6 @@ for _ in range(n_episodes):
     episodes_list['Reward'].append(episode['Reward'])
     episodes_list['Terminated'].append(episode['Terminated'])
     episodes_list['Truncated'].append(episode['Truncated'])
-    count = count + 1
 
 with open(f'{directory}/{filename}', 'wb') as f:
     pickle.dump(episodes_list, f)
