@@ -11,3 +11,6 @@ atari/clustering/clustering_res
 atari/dataset
 atari/images_dataset
 atari/similarity_dataset
+
+highway-env/dataset
+highway-env/subpolicies
