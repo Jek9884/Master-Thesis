@@ -152,5 +152,5 @@ for i in range(n_episodes):
     episodes_list['Terminated'].append(episode['Terminated'])
     episodes_list['Truncated'].append(episode['Truncated'])
 
-with open(f'{directory}/{filename}', 'wb') as f:
+with open(f'{directory}/{filename}', 'ab') as f:
     pickle.dump(episodes_list, f)
