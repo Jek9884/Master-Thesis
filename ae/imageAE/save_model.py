@@ -3,7 +3,7 @@ from ray import tune
 import argparse
 from pytorch_lightning import seed_everything
 from utilities import normalize_images_tensor, log_scale_images_tensor
-from model import ImageAutoencoder
+from atari_model import ImageAutoencoder
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from kfoldTrainer import KFoldTrainer
 from imageDataset import ImageDataModule

@@ -2,7 +2,7 @@ import gzip
 import numpy as np
 import torch
 import os
-from model import ImageAutoencoder
+from atari_model import ImageAutoencoder
 from imageDataset import ImageDataset
 from torch.utils.data import DataLoader
 

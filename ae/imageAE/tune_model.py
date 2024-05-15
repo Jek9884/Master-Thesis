@@ -10,7 +10,8 @@ from lightning.pytorch.loggers import WandbLogger
 from ray.air.integrations.wandb import setup_wandb
 from lightning import seed_everything
 
-from model import ImageAutoencoder
+from atari_model import ImageAutoencoder
+from highway_model import HighwayEnvModel
 from imageDataset import ImageDataModule
 from kfoldTrainer import KFoldTrainer
 
@@ -36,18 +37,17 @@ def trainable(config_dict):
     wandb.init(project="Master-Thesis", name = ray.train.get_context().get_trial_name(), config=config_dict)
 
     # Define the model
-    model = ImageAutoencoder(n_channels=config_dict['n_channels'], height=config_dict['height'], width=config_dict['width'], latent_dim=config_dict['embedding_dim'], lr=config_dict['lr'], weight_decay=config_dict['weight_decay'], eps=config_dict['eps'])
-
+    if config_dict['model_type'] == "small":
+        model = ImageAutoencoder(n_channels=config_dict['n_channels'], height=config_dict['height'], width=config_dict['width'], latent_dim=config_dict['embedding_dim'], lr=config_dict['lr'], weight_decay=config_dict['weight_decay'], eps=config_dict['eps'])
+    else:
+        model = HighwayEnvModel(n_channels=config_dict['n_channels'], height=config_dict['height'], width=config_dict['width'], latent_dim=config_dict['embedding_dim'], lr=config_dict['lr'], weight_decay=config_dict['weight_decay'], eps=config_dict['eps'])
+    
     early_stopping_callback = EarlyStopping(
         monitor="val_loss",
         patience=config_dict["patience"],
         mode="min"
     )
     
-    #run = setup_wandb(project="Master-Thesis", name=ray.train.get_context().get_trial_name())
-
-    #wandb_logger = WandbLogger(job_type='train', name=run.name, id=run.id, save_dir=run.dir, config=config_dict, run=run)
-
     wandb_logger = WandbLogger(project="Master-Thesis", config=config_dict, settings=wandb.Settings(start_method="fork"))
 
     # Define a Lightning Trainer
@@ -60,6 +60,7 @@ parser = argparse.ArgumentParser(description="Train the image autoencoder")
 
 # Define command-line arguments
 parser.add_argument("--device", type=str, help="Device where to execute")
+parser.add_argument("--model_type", type=int, help="0 for atari model or 1 for highway model")
 parser.add_argument("--file_path", type=str, help="Path to the dataset")
 parser.add_argument("--normalize", type=int, help="Normalize data before computation")
 parser.add_argument("--log_scale", type=int, help="Log scale data before computation")
@@ -67,6 +68,11 @@ parser.add_argument("--log_scale", type=int, help="Log scale data before computa
 # Parse the command-line arguments
 args = parser.parse_args()
 dev = args.device
+if args.model_type == 0:
+    model_type = "small"
+elif args.model_type == 1:
+    model_type = "highway"
+
 file_path = args.file_path
 normalize = args.normalize
 log_scale = args.log_scale
@@ -75,7 +81,7 @@ seed = 42
 seed_everything(seed, workers=True)
 
 images_tensor = torch.load(file_path)
-#images_tensor = images_tensor[:10000, :, :, :]
+#images_tensor = images_tensor[:10, :, :, :]
 
 os.environ["CUDA_VISIBLE_DEVICES"] = dev
 device = torch.device(0)
@@ -86,16 +92,16 @@ ray.init()
 
 data_pt = ray.put(images_tensor)
 
-game = "Full" #IceHockey, Pong, Alien, SpaceInvaders, AirRaid
+game = "Thesis-test" #"Full", IceHockey, Pong, Alien, SpaceInvaders, AirRaid
 
 # Define the search space
 search_space = {
     'data_pt' : data_pt,
-    'batch_size' : tune.grid_search([32, 64, 128]),
-    'lr' : tune.grid_search([1e-3, 1e-5, 1e-7]),
+    'batch_size' : tune.grid_search([32]),
+    'lr' : tune.grid_search([1e-5]),
     'eps' : tune.grid_search([1e-8]),
-    'weight_decay' : tune.grid_search([1e-3, 1e-5, 1e-7]),
-    'epochs' : tune.grid_search([1000]),
+    'weight_decay' : tune.grid_search([1e-3]),
+    'epochs' : tune.grid_search([10]),
     'embedding_dim' : tune.grid_search([128]),
     'n_channels' : tune.grid_search([4]),
     'height' : tune.grid_search([84]),
@@ -106,7 +112,7 @@ search_space = {
     'patience' : tune.grid_search([5]),
     'divergence_threshold' : tune.grid_search([1e-5]),
     'n_samples' : tune.grid_search([images_tensor.shape[0]]),
-    'model_type' : tune.grid_search(["small"]),
+    'model_type' : tune.grid_search([model_type]),
     'normalize' : tune.grid_search([1]),
     'log_scale' : tune.grid_search([0]),
     'seed' : tune.grid_search([seed])

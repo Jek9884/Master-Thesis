@@ -4,12 +4,14 @@ from stable_baselines3.common.utils import get_schedule_fn
 from stable_baselines3.common.type_aliases import Schedule
 from gymnasium.wrappers import RecordVideo
 import gymnasium as gym
+from gymnasium import spaces
 import torch
 import pickle
 import argparse
 import os
 import cv2
 import time
+import numpy as np
 
 def read_video_frames(video_path):
     # Open the video file
@@ -99,7 +101,14 @@ env = gym.make(env_name, config=config, render_mode="rgb_array")
 env = RecordVideo(env, directory, lambda x: True, disable_logger = True)
 
 scheduler = get_schedule_fn(0.1)
-policy = SACPolicy(env.observation_space, env.action_space, scheduler)
+
+obs_space = env.observation_space
+
+if env_name == "lane-centering-v0":
+    obs_space = spaces.Box(-np.inf, np.inf, (1,9), dtype = np.float32)
+    
+
+policy = SACPolicy(obs_space, env.action_space, scheduler)
 policy.load_state_dict(torch.load(policy_path, map_location=torch.device(device)))
 
 model = SAC('MlpPolicy', env=env, use_sde=False, device=device)
@@ -128,6 +137,9 @@ for i in range(n_episodes):
     }
 
     while True:
+        if env_name == "lane-centering-v0":
+            obs = np.expand_dims(obs[0], axis=0)
+
         action = model.predict(obs)
         episode['Action'].append(action[0])
         obs, reward, terminated, truncated, info = env.step(action[0])
@@ -152,5 +164,5 @@ for i in range(n_episodes):
     episodes_list['Terminated'].append(episode['Terminated'])
     episodes_list['Truncated'].append(episode['Truncated'])
 
-with open(f'{directory}/{filename}', 'ab') as f:
+with open(f'{directory}/{filename}', 'wb') as f:
     pickle.dump(episodes_list, f)
