@@ -51,7 +51,7 @@ def delete_file(file_path):
 parser = argparse.ArgumentParser(description="Create episodes for the specified env")
 
 # Define command-line arguments
-parser.add_argument("--device", type=str, default='cpu', help="GPU to use")
+parser.add_argument("--device", type=str, default='cpu', help="Device to use")
 parser.add_argument("--env_name", type=str, help="Environment to use")
 parser.add_argument("--policy_path", type=str, help="Path to trained policy")
 parser.add_argument("--n_episodes", type=int, help="Number of episodes to perform")
@@ -122,10 +122,11 @@ episodes_list = {
     'Truncated' : []
 }
 
-count = 0
-
 start_time = time.time()
-for i in range(n_episodes):
+
+i = 0
+
+while i < n_episodes:
 
     obs, _ = env.reset()
 
@@ -152,6 +153,15 @@ for i in range(n_episodes):
     
     # Get last four frames from the created video
     videoname = f'{directory}/rl-video-episode-{i}'
+
+    if np.array(read_video_frames(f'{videoname}.mp4')).shape[0] < 4:
+        i = i + 1
+        n_episodes = n_episodes + 1
+        # Delete video files
+        delete_file(f'{videoname}.mp4')
+        delete_file(f'{videoname}.meta.json')
+        continue
+    
     episodes_list['Observation'].append(read_video_frames(f'{videoname}.mp4'))
 
     # Delete video files
@@ -163,6 +173,8 @@ for i in range(n_episodes):
     episodes_list['Reward'].append(episode['Reward'])
     episodes_list['Terminated'].append(episode['Terminated'])
     episodes_list['Truncated'].append(episode['Truncated'])
+
+    i = i + 1
 
 with open(f'{directory}/{filename}', 'wb') as f:
     pickle.dump(episodes_list, f)
