@@ -1,9 +1,3 @@
-#TODO check if the fix on dataset generation worked
-#TODO create funtion to apply upsampling to all images (try on one image for each task) in this way we have uniform images 
-#TODO create images dataset
-#TODO test model
-#TODO make grid search
-
 import pickle
 import argparse
 import os
@@ -61,59 +55,68 @@ parser = argparse.ArgumentParser(description="Extract images from the full datas
 # Define command-line arguments
 parser.add_argument("--dataset_path", type=str, help="Path of the dataset")
 parser.add_argument("--save_path", type=str, help="Path where to save the extracted data")
+parser.add_argument("--n_sample", type=float, default=1, help="Percentage of sample to consider for each task")
 
 args = parser.parse_args()
 dataset_path = args.dataset_path
 save_path = args.save_path
+n_sample = args.n_sample
 
-if not os.path.exists(dataset_path):
-    print(f"File does not exist")
+if n_sample <= 0 or n_sample > 1:
+    print("Percentage out of range (0,1]")
 else:
-    tensor_list = None
 
-    pkl_files = find_pkls_in_subfolders(dataset_path)
+    if not os.path.exists(dataset_path):
+        print(f"File does not exist")
+    else:
+        tensor_list = None
 
-    for file in pkl_files:
+        pkl_files = find_pkls_in_subfolders(dataset_path)
 
-        split_string = file.split('/')
-        env_name = split_string[2]
+        for file in pkl_files:
 
-        if env_name != "u-turn-v0":
+            split_string = file.split('/')
+            env_name = split_string[2]
 
-            with open(file, 'rb') as f:
-                data = pickle.load(f)
-                obs = data['Observation']
-                obs = np.array(obs)
-                result = obs
+            # Exclude u-turn for observations dimension issues
+            if env_name != "u-turn-v0":
 
-                # Make upsampling only for observations that are smaller than 600x600
-                if obs[0][0].shape[0] != 600 or obs[0][0].shape[1] != 600:
+                with open(file, 'rb') as f:
+                    data = pickle.load(f)
+                    obs = data['Observation']
+                    obs = np.array(obs)
+                    if n_sample < 1:
+                        n_obs = int(obs.shape[0] * n_sample)
+                        print(f'Env name: {env_name} - Num sample {n_obs}')
+                        obs = obs[:n_obs, :, :, :]
+                    result = obs
 
-                    # Number of processes (you can adjust this based on your system's capabilities)
-                    num_processes = multiprocessing.cpu_count()
+                    # Make upsampling only for observations that are smaller than 600x600
+                    if obs[0][0].shape[0] != 600 or obs[0][0].shape[1] != 600:
 
-                    # Create a pool of workers
-                    pool = multiprocessing.Pool(processes=num_processes)
+                        num_processes = multiprocessing.cpu_count()
 
-                    # Map the function to the collection of items using multiple processes
-                    result = pool.map(process_episode, obs)
+                        # Create a pool of workers
+                        pool = multiprocessing.Pool(processes=num_processes)
 
-                    # Close the pool to release resources
-                    pool.close()
-                    pool.join()
+                        # Map the function to the collection of items using multiple processes
+                        result = pool.map(process_episode, obs)
 
-                    result = np.array(result)
-                    
-            if tensor_list is None:
-                tensor_list = result
-            else:
-                tensor_list = np.concatenate((tensor_list, result))
-    
-    # Convert NumPy array to PyTorch tensor
-    tensor = torch.tensor(tensor_list)
+                        # Close the pool to release resources
+                        pool.close()
+                        pool.join()
 
-    # Save tensor to a file
-    torch.save(tensor, f'{save_path}/final_res.pt')
+                        result = np.array(result)
+                        
+                if tensor_list is None:
+                    tensor_list = result
+                else:
+                    tensor_list = np.concatenate((tensor_list, result))
+
+        tensor = torch.tensor(tensor_list)
+
+        # Save tensor to a file
+        torch.save(tensor, f'{save_path}/final_res_{n_sample}.pt')
 
 
 
