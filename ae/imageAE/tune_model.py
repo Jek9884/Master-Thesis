@@ -62,11 +62,10 @@ parser = argparse.ArgumentParser(description="Train the image autoencoder")
 parser.add_argument("--device", type=str, help="Device where to execute")
 parser.add_argument("--model_type", type=int, help="0 for atari model or 1 for highway model")
 parser.add_argument("--file_path", type=str, help="Path to the dataset")
-parser.add_argument("--normalize", type=int, help="Normalize data before computation")
-parser.add_argument("--log_scale", type=int, help="Log scale data before computation")
 
 # Parse the command-line arguments
 args = parser.parse_args()
+
 dev = args.device
 if args.model_type == 0:
     model_type = "small"
@@ -74,14 +73,12 @@ elif args.model_type == 1:
     model_type = "highway"
 
 file_path = args.file_path
-normalize = args.normalize
-log_scale = args.log_scale
 
 seed = 42
 seed_everything(seed, workers=True)
 
 images_tensor = torch.load(file_path)
-#images_tensor = images_tensor[:10, :, :, :]
+images_tensor = images_tensor[:10, :, :, :]
 
 os.environ["CUDA_VISIBLE_DEVICES"] = dev
 device = torch.device(0)
@@ -92,7 +89,7 @@ ray.init()
 
 data_pt = ray.put(images_tensor)
 
-game = "Thesis-test" #"Full", IceHockey, Pong, Alien, SpaceInvaders, AirRaid
+game = "Full-NatureCNN" #"Full", IceHockey, Pong, Alien, SpaceInvaders, AirRaid
 
 # Define the search space
 search_space = {
@@ -103,9 +100,9 @@ search_space = {
     'weight_decay' : tune.grid_search([1e-3]),
     'epochs' : tune.grid_search([10]),
     'embedding_dim' : tune.grid_search([128]),
-    'n_channels' : tune.grid_search([4]),
-    'height' : tune.grid_search([84]),
-    'width' : tune.grid_search([84]),
+    'n_channels' : tune.grid_search([images_tensor.shape[1]]),
+    'height' : tune.grid_search([images_tensor.shape[2]]),
+    'width' : tune.grid_search([images_tensor.shape[3]]),
     'criterion' : tune.grid_search(['mse']),
     'metric' : tune.grid_search(['mse']),
     'game' : tune.grid_search([game]),
