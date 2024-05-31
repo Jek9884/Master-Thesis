@@ -6,13 +6,16 @@ import ray
 import wandb
 from ray.air.config import RunConfig
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch import Trainer
 from ray.air.integrations.wandb import setup_wandb
 from lightning import seed_everything
 
 from atari_model import ImageAutoencoder
 from highway_model import HighwayEnvModel
-from imageDataset import ImageDataModule
+from image_kfold_dataset import ImageKfoldDataModule
+from image_holdout_dataset import ImageHoldoutDataModule
 from kfoldTrainer import KFoldTrainer
 
 import sys
@@ -47,12 +50,24 @@ def trainable(config_dict):
         patience=config_dict["patience"],
         mode="min"
     )
+
+    model_checkpoint_callback = ModelCheckpoint(
+        monitor="val_loss", 
+        mode='min', 
+        save_top_k=1, 
+        save_last=True, 
+        every_n_epochs=200)
     
     wandb_logger = WandbLogger(project="Master-Thesis", config=config_dict, settings=wandb.Settings(start_method="fork"))
 
     # Define a Lightning Trainer
-    trainer = KFoldTrainer(max_epochs=config_dict['epochs'], num_folds=3, deterministic = True, enable_progress_bar = False, logger=wandb_logger, callbacks=[early_stopping_callback])
-    trainer.fit(model, datamodule=ImageDataModule(images_tensor, batch_size=config_dict['batch_size'], num_workers=10))
+    if config_dict['cross_validation'] == "Kfold":
+        trainer = KFoldTrainer(max_epochs=config_dict['epochs'], num_folds=3, deterministic = True, enable_progress_bar = False, logger=wandb_logger, callbacks=[early_stopping_callback, model_checkpoint_callback])
+        data_module = ImageKfoldDataModule(images_tensor, batch_size=config_dict['batch_size'], num_workers=10)
+    elif config_dict['cross_validation'] == "Holdout":
+        trainer = Trainer(max_epochs=config_dict['epochs'], deterministic = True, enable_progress_bar = False, logger=wandb_logger, callbacks=[early_stopping_callback, model_checkpoint_callback])
+        data_module = ImageHoldoutDataModule(images_tensor, batch_size=config_dict['batch_size'], num_workers=10)
+    trainer.fit(model, datamodule=data_module)
 
     wandb.finish()
 
@@ -62,6 +77,7 @@ parser = argparse.ArgumentParser(description="Train the image autoencoder")
 parser.add_argument("--device", type=str, help="Device where to execute")
 parser.add_argument("--model_type", type=int, help="0 for atari model or 1 for highway model")
 parser.add_argument("--file_path", type=str, help="Path to the dataset")
+parser.add_argument("--cross_validation", type=int, help="0 for Holdout CV or 1 for Kfold CV")
 
 # Parse the command-line arguments
 args = parser.parse_args()
@@ -71,14 +87,23 @@ if args.model_type == 0:
     model_type = "small"
 elif args.model_type == 1:
     model_type = "highway"
+else:
+    raise ValueError("Model type parameter should be 0 or 1")
 
 file_path = args.file_path
+
+if args.cross_validation == 0:
+    cross_validation = "Holdout"
+elif args.cross_validation == 1:
+    cross_validation = "Kfold"
+else:
+    raise ValueError("Cross validation parameter should be 0 or 1")
 
 seed = 42
 seed_everything(seed, workers=True)
 
 images_tensor = torch.load(file_path)
-images_tensor = images_tensor[:10, :, :, :]
+#images_tensor = images_tensor[:10, :, :, :]
 
 os.environ["CUDA_VISIBLE_DEVICES"] = dev
 device = torch.device(0)
@@ -94,11 +119,11 @@ game = "Full-NatureCNN" #"Full", IceHockey, Pong, Alien, SpaceInvaders, AirRaid
 # Define the search space
 search_space = {
     'data_pt' : data_pt,
-    'batch_size' : tune.grid_search([32]),
-    'lr' : tune.grid_search([1e-5]),
+    'batch_size' : tune.grid_search([128]),
+    'lr' : tune.grid_search([1e-4]),
     'eps' : tune.grid_search([1e-8]),
-    'weight_decay' : tune.grid_search([1e-3]),
-    'epochs' : tune.grid_search([10]),
+    'weight_decay' : tune.grid_search([1e-3, 1e-5, 1e-7]),
+    'epochs' : tune.grid_search([1000]),
     'embedding_dim' : tune.grid_search([128]),
     'n_channels' : tune.grid_search([images_tensor.shape[1]]),
     'height' : tune.grid_search([images_tensor.shape[2]]),
@@ -112,11 +137,12 @@ search_space = {
     'model_type' : tune.grid_search([model_type]),
     'normalize' : tune.grid_search([1]),
     'log_scale' : tune.grid_search([0]),
-    'seed' : tune.grid_search([seed])
+    'seed' : tune.grid_search([seed]),
+    'cross_validation' : tune.grid_search([cross_validation])
 }
 
 tuner = tune.Tuner(tune.with_resources(trainable, 
-                                       {"cpu":10,"gpu":0.5},
+                                       {"cpu":10,"gpu":1},
                                        ),
                     param_space = search_space,
                     run_config = RunConfig(name=game, verbose=1)

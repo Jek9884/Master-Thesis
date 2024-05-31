@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import os
 from atari_model import ImageAutoencoder
-from imageDataset import ImageDataset
+from image_kfold_dataset import ImageKfoldDataset
 from torch.utils.data import DataLoader
 
 def get_episodes_idx(dir_path, seed, ckpt):
@@ -74,7 +74,7 @@ def extract_embeddings(images_tensor, dev, model_path, normalize, log_scale, num
     model = ImageAutoencoder.load_from_checkpoint(model_path)
     model.to(device)
 
-    images_dataset = ImageDataset(images_tensor)
+    images_dataset = ImageKfoldDataset(images_tensor)
     images_dataloader = DataLoader(images_dataset, batch_size=1, shuffle=False, num_workers=num_workers)
 
     embeddings_list = []

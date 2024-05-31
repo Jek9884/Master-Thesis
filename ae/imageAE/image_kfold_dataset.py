@@ -2,7 +2,7 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader, Subset
 from lightning import LightningDataModule
 
-class ImageDataModule(LightningDataModule):
+class ImageKfoldDataModule(LightningDataModule):
     def __init__(self, images_list, batch_size=32, num_folds=5, num_workers=0, seed=None):
         super().__init__()
         self.images_list = images_list
@@ -15,7 +15,7 @@ class ImageDataModule(LightningDataModule):
         pass
 
     def setup(self, stage=None):
-        self.dataset = ImageDataset(self.images_list, self.seed)
+        self.dataset = ImageKfoldDataset(self.images_list, self.seed)
 
         # Generate k-fold loaders
         self.kfold_loaders = self.dataset.get_kfold_loaders(num_folds=self.num_folds, batch_size=self.batch_size, num_workers=self.num_workers)
@@ -27,7 +27,7 @@ class ImageDataModule(LightningDataModule):
         return self.kfold_loaders[self.trainer.current_fold][1]
     
 
-class ImageDataset(Dataset):
+class ImageKfoldDataset(Dataset):
     def __init__(self, images_list, transform=None, seed=None):
         self.images_list = images_list
         self.transform = transform
