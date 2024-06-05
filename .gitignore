@@ -15,3 +15,4 @@ atari/similarity_dataset
 highway-env/dataset
 highway-env/subpolicies
 highway-env/HighwayEnv
+highway-env/final_model
