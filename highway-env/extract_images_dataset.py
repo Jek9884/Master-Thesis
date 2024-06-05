@@ -49,6 +49,37 @@ def process_episode(images):
 
     return np.array(upsampled_images)
 
+def extract_images_from_pikle(file):
+
+    with open(file, 'rb') as f:
+        data = pickle.load(f)
+        obs = data['Observation']
+        obs = np.array(obs)
+        if n_sample < 1:
+            n_obs = int(obs.shape[0] * n_sample)
+            print(f'Env name: {env_name} - Num sample {n_obs}')
+            obs = obs[:n_obs, :, :, :]
+        result = obs
+
+        # Make upsampling only for observations that are smaller than 600x600
+        if obs[0][0].shape[0] != 600 or obs[0][0].shape[1] != 600:
+
+            num_processes = multiprocessing.cpu_count()
+
+            # Create a pool of workers
+            pool = multiprocessing.Pool(processes=num_processes)
+
+            # Map the function to the collection of items using multiple processes
+            result = pool.map(process_episode, obs)
+
+            # Close the pool to release resources
+            pool.close()
+            pool.join()
+
+            result = np.array(result)
+
+        return result
+
 
 parser = argparse.ArgumentParser(description="Extract images from the full dataset to train the Autoencoder", allow_abbrev=False)
 
@@ -56,67 +87,45 @@ parser = argparse.ArgumentParser(description="Extract images from the full datas
 parser.add_argument("--dataset_path", type=str, help="Path of the dataset")
 parser.add_argument("--save_path", type=str, help="Path where to save the extracted data")
 parser.add_argument("--n_sample", type=float, default=1, help="Percentage of sample to consider for each task")
+parser.add_argument("--env_name", type=str, help="Name of the environment to consider, if 'all' consider all the environments")
 
 args = parser.parse_args()
 dataset_path = args.dataset_path
 save_path = args.save_path
 n_sample = args.n_sample
+name = args.env_name
 
 if n_sample <= 0 or n_sample > 1:
-    print("Percentage out of range (0,1]")
-else:
+    raise ValueError("Percentage out of range (0,1]")
 
-    if not os.path.exists(dataset_path):
-        print(f"File does not exist")
-    else:
-        tensor_list = None
+if not os.path.exists(dataset_path):
+    raise ValueError(f"File does not exist")
 
-        pkl_files = find_pkls_in_subfolders(dataset_path)
+tensor_list = None
 
-        for file in pkl_files:
+pkl_files = find_pkls_in_subfolders(dataset_path)
 
-            split_string = file.split('/')
-            env_name = split_string[2]
+for file in pkl_files:
 
-            # Exclude u-turn for observations dimension issues
-            if env_name != "u-turn-v0":
+    split_string = file.split('/')
+    env_name = split_string[2]
 
-                with open(file, 'rb') as f:
-                    data = pickle.load(f)
-                    obs = data['Observation']
-                    obs = np.array(obs)
-                    if n_sample < 1:
-                        n_obs = int(obs.shape[0] * n_sample)
-                        print(f'Env name: {env_name} - Num sample {n_obs}')
-                        obs = obs[:n_obs, :, :, :]
-                    result = obs
+    # Exclude u-turn for observations dimension issues
+    if env_name != "u-turn-v0":
 
-                    # Make upsampling only for observations that are smaller than 600x600
-                    if obs[0][0].shape[0] != 600 or obs[0][0].shape[1] != 600:
+        result = extract_images_from_pikle(file)
+                
+        if tensor_list is None:
+            tensor_list = result
+        else:
+            tensor_list = np.concatenate((tensor_list, result))
 
-                        num_processes = multiprocessing.cpu_count()
+tensor = torch.tensor(tensor_list)
 
-                        # Create a pool of workers
-                        pool = multiprocessing.Pool(processes=num_processes)
+# Save tensor to a file
+torch.save(tensor, f'{save_path}/{name}_final_res_{n_sample}.pt')
+    
 
-                        # Map the function to the collection of items using multiple processes
-                        result = pool.map(process_episode, obs)
-
-                        # Close the pool to release resources
-                        pool.close()
-                        pool.join()
-
-                        result = np.array(result)
-                        
-                if tensor_list is None:
-                    tensor_list = result
-                else:
-                    tensor_list = np.concatenate((tensor_list, result))
-
-        tensor = torch.tensor(tensor_list)
-
-        # Save tensor to a file
-        torch.save(tensor, f'{save_path}/final_res_{n_sample}.pt')
 
 
 
