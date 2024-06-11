@@ -2,11 +2,12 @@ import subprocess
 import argparse
 import pickle
 import pandas as pd
+import os
 
 def generate_dataset(device, env_name, policy_path, n_episodes):
     # Construct the command with arguments
     command = [
-        'python', 'create_dataset.py',
+        'python', '../highway-env/create_dataset.py',
         '--device', device,
         '--env_name', env_name,
         '--policy_path', policy_path,
@@ -35,18 +36,23 @@ parser.add_argument("--device", type=str, default='cpu', help="Device to use")
 parser.add_argument("--env_name", type=str, help="Environment to use")
 parser.add_argument("--policy_path", type=str, help="Path to trained policy")
 parser.add_argument("--n_episodes", type=int, help="Number of episodes to perform")
-
+parser.add_argument("--k", type=int, help="Number of the best episodes to keep")
 
 args = parser.parse_args()
 device = args.device
 env_name = args.env_name
 policy_path = args.policy_path
 n_episodes = args.n_episodes
+k = args.k
+
+directory = "./transfer_dataset"
+if not os.path.exists(directory):
+    os.mkdir(directory)
 
 # Generate dataset of episodes
 generate_dataset(device, env_name, policy_path, n_episodes)
 
-with open("./dataset/highway-v0/tmp.pkl", "rb") as f:
+with open(f"../highway-env/dataset/{env_name}/tmp.pkl", "rb") as f:
     data = pickle.load(f)
 
 df = pd.DataFrame(data)
@@ -60,9 +66,18 @@ df = df.sort_values(by='sum_float_list', ascending=False)
 df = df.drop(columns=['sum_float_list'])
 
 # Get the first 100 best episodes
-df = df.head(100)
+df = df.head(k)
 
 data = df.to_dict()
 
-with open(f"./dataset/{env_name}/highway_best_100.pkl", "wb") as f:
+tokens = env_name.split('-')
+if tokens[1] != "v0" and tokens[1] != "v1":
+    name = f'{tokens[0]}-{tokens[1]}'
+else:
+    name = tokens[0]
+
+with open(f"{directory}/{name}_best_{k}.pkl", "wb") as f:
     pickle.dump(data, f)
+
+if os.path.exists(f"../highway-env/dataset/{env_name}/tmp.pkl"):
+    os.remove(f"../highway-env/dataset/{env_name}/tmp.pkl")
