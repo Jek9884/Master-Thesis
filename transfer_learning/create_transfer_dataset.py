@@ -78,6 +78,3 @@ else:
 
 with open(f"{directory}/{name}_best_{k}.pkl", "wb") as f:
     pickle.dump(data, f)
-
-if os.path.exists(f"../highway-env/dataset/{env_name}/tmp.pkl"):
-    os.remove(f"../highway-env/dataset/{env_name}/tmp.pkl")
