@@ -7,6 +7,8 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from ae.imageAE.highway_model import HighwayEnvModel
 import argparse
+import wandb
+from wandb.integration.sb3 import WandbCallback
 
 def main():
 
@@ -42,7 +44,7 @@ def main():
     parser.add_argument("--n_envs", type=int, default=1, help="Number of environments to use in parallel")
     parser.add_argument("--seed", type=int, default=42, help="Seed to use for replicability")
     parser.add_argument("--k", type=int, default=None, help="Number of time-steps to perform before to use the metric")
-    parser.add_argument("--similarity_thr", type=float, help="Threshold for the metric")
+    parser.add_argument("--similarity_thr", default=None, type=float, help="Threshold for the metric")
 
     # Parse the command-line arguments
     args = parser.parse_args()
@@ -67,6 +69,23 @@ def main():
     similarity_thr = args.similarity_thr
 
     task_description = None
+    
+    wandb_config = {
+        "transfer_type": transfer_type,
+        "total_timesteps": total_timesteps,
+        "env_name": env_name,
+        "phase": "training",
+        "k": k,
+        "simil_thr": similarity_thr
+    }
+
+    run = wandb.init(
+        project="transfer_learning",
+        config=wandb_config,
+        sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
+        monitor_gym=True,  # auto-upload the videos of agents playing the game
+        save_code=True,  # optional
+    )
 
     # Init env
     env = make_vec_env(env_name, n_envs=n_envs, env_kwargs={'config': config}, vec_env_cls=SubprocVecEnv)
@@ -95,7 +114,12 @@ def main():
                                 train_freq=15, use_sde=False, policy_dir=policy_dir, experience_dir=experience_dir, 
                                 descriptions_dir=description_dir, ae_model=ae, k=k, similarity_thr=similarity_thr, device=device, seed=seed)
 
-    agent.learn(total_timesteps=total_timesteps, progress_bar=True)
+    agent.learn(total_timesteps=total_timesteps, progress_bar=True,
+                callback=WandbCallback(
+                    gradient_save_freq=100,
+                    model_save_path=f"models/{run.id}",
+                    verbose=2,
+                ))
 
     if transfer_type == 1:
         agent.save(f"{env_name}_{transfer_type}_{n_envs}env_{k}_{similarity_thr}")
