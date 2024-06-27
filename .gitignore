@@ -19,5 +19,6 @@ highway-env/HighwayEnv
 
 transfer_learning/transfer_dataset
 transfer_learning/__pycache__
+transfer_learning/wandb
 
 stable-baselines3
