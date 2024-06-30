@@ -68,7 +68,7 @@ def main():
     k = args.k
     similarity_thr = args.similarity_thr
 
-    task_description = None
+    task_description = "The ego-veichle is driving on a racetrack. The agent's objective is to follow the tracks while avoiding collisions with other vehicles."
     
     wandb_config = {
         "transfer_type": transfer_type,
@@ -76,7 +76,8 @@ def main():
         "env_name": env_name,
         "phase": "training",
         "k": k,
-        "simil_thr": similarity_thr
+        "simil_thr": similarity_thr,
+        "task_description" : task_description
     }
 
     run = wandb.init(
@@ -122,7 +123,10 @@ def main():
                 ))
 
     if transfer_type == 1:
-        agent.save(f"{env_name}_{transfer_type}_{n_envs}env_{k}_{similarity_thr}")
+        if task_description is not None:
+            agent.save(f"{env_name}_{transfer_type}_withdesc_{n_envs}env_{k}_{similarity_thr}")
+        else:
+            agent.save(f"{env_name}_{transfer_type}_{n_envs}env_{k}_{similarity_thr}")
     else:
         agent.save(f"{env_name}_{transfer_type}_{n_envs}env")
 
