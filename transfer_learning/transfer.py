@@ -2,7 +2,7 @@ import torch
 import os
 import sys
 sys.path.insert(1, "../")
-from stable_baselines3.sac.sac import SACMaster, SAC
+from stable_baselines3.sac.sac import SACMaster
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from ae.imageAE.highway_model import HighwayEnvModel
@@ -39,7 +39,7 @@ def main():
     parser.add_argument("--description_dir", type=str, help="Path to the source tasks descriptions")
     parser.add_argument("--ae_path", type=str, help="Path to the ae model")
     parser.add_argument("--device", type=str, help="Device where to execute")
-    parser.add_argument("--transfer_type", type=int, help="0 for no transfer CV or 1 for transfer")
+    parser.add_argument("--transfer_type", type=int, help="0 for no transfer, 1 for transfer, 2 for transfer with description")
     parser.add_argument("--total_timesteps", type=int, help="Max number of timesteps to perform")
     parser.add_argument("--n_envs", type=int, default=1, help="Number of environments to use in parallel")
     parser.add_argument("--seed", type=int, default=42, help="Seed to use for replicability")
@@ -49,9 +49,9 @@ def main():
     # Parse the command-line arguments
     args = parser.parse_args()
 
-    assert args.transfer_type == 0 or args.transfer_type == 1
+    assert args.transfer_type == 0 or args.transfer_type == 1 or args.transfer_type == 2
     assert args.n_envs > 0
-    if args.transfer_type == 1:
+    if args.transfer_type == 1 or args.transfer_type == 2:
         assert args.similarity_thr >= -1 and args.similarity_thr <= 1
         assert args.k > 0
 
@@ -68,8 +68,11 @@ def main():
     k = args.k
     similarity_thr = args.similarity_thr
 
-    task_description = "The ego-veichle is driving on a racetrack. The agent's objective is to follow the tracks while avoiding collisions with other vehicles."
-    
+    if transfer_type == 2:
+        task_description = "The ego-veichle is driving on a racetrack. The agent's objective is to follow the tracks while avoiding collisions with other vehicles."
+    else:
+        task_description = None
+
     wandb_config = {
         "transfer_type": transfer_type,
         "total_timesteps": total_timesteps,
@@ -102,18 +105,17 @@ def main():
         # Without transfer learning
         agent = SACMaster(env=env, policy='MlpPolicy', learning_rate=1e-4, batch_size=1024, tau=0.9, gamma=0.99, gradient_steps=10, 
                             train_freq=15, use_sde=False, device=device, seed=seed)
-    else:
-        if task_description is not None:
-            # TL with task description
-            agent = SACMaster(env=env, policy='MlpPolicy', learning_rate=1e-4, batch_size=1024, tau=0.9, gamma=0.99, gradient_steps=10, 
-                                train_freq=15, use_sde=False, policy_dir=policy_dir, experience_dir=experience_dir, 
-                                descriptions_dir=description_dir, ae_model=ae, k=k, similarity_thr=similarity_thr, task_description=task_description,
-                                tokenizer_str="bert-base-cased", device=device, seed=seed)
-        else:
-            # TL without task description
-            agent = SACMaster(env=env, policy='MlpPolicy', learning_rate=1e-4, batch_size=1024, tau=0.9, gamma=0.99, gradient_steps=10, 
-                                train_freq=15, use_sde=False, policy_dir=policy_dir, experience_dir=experience_dir, 
-                                descriptions_dir=description_dir, ae_model=ae, k=k, similarity_thr=similarity_thr, device=device, seed=seed)
+    elif transfer_type == 1:
+        # TL without task description
+        agent = SACMaster(env=env, policy='MlpPolicy', learning_rate=1e-4, batch_size=1024, tau=0.9, gamma=0.99, gradient_steps=10, 
+                            train_freq=15, use_sde=False, policy_dir=policy_dir, experience_dir=experience_dir, 
+                            descriptions_dir=description_dir, ae_model=ae, k=k, similarity_thr=similarity_thr, device=device, seed=seed)
+    elif transfer_type == 2:
+        # TL with task description
+        agent = SACMaster(env=env, policy='MlpPolicy', learning_rate=1e-4, batch_size=1024, tau=0.9, gamma=0.99, gradient_steps=10, 
+                            train_freq=15, use_sde=False, policy_dir=policy_dir, experience_dir=experience_dir, 
+                            descriptions_dir=description_dir, ae_model=ae, k=k, similarity_thr=similarity_thr, task_description=task_description,
+                            tokenizer_str="bert-base-cased", device=device, seed=seed)
 
     agent.learn(total_timesteps=total_timesteps, progress_bar=True,
                 callback=WandbCallback(
@@ -122,11 +124,8 @@ def main():
                     verbose=2,
                 ))
 
-    if transfer_type == 1:
-        if task_description is not None:
-            agent.save(f"{env_name}_{transfer_type}_withdesc_{n_envs}env_{k}_{similarity_thr}")
-        else:
-            agent.save(f"{env_name}_{transfer_type}_{n_envs}env_{k}_{similarity_thr}")
+    if transfer_type > 0:
+        agent.save(f"{env_name}_{transfer_type}_{n_envs}env_{k}_{similarity_thr}")
     else:
         agent.save(f"{env_name}_{transfer_type}_{n_envs}env")
 
