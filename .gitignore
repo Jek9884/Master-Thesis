@@ -20,5 +20,9 @@ highway-env/HighwayEnv
 transfer_learning/transfer_dataset
 transfer_learning/__pycache__
 transfer_learning/wandb
+transfer_learning/grid_res
+transfer_learning/models
+transfer_learning/descriptions.json
+transfer_learning/tensorboard_log
 
 stable-baselines3
