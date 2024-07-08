@@ -104,18 +104,19 @@ def main():
     if transfer_type == 0:
         # Without transfer learning
         agent = SACMaster(env=env, policy='MlpPolicy', learning_rate=1e-4, batch_size=1024, tau=0.9, gamma=0.99, gradient_steps=10, 
-                            train_freq=15, use_sde=False, device=device, seed=seed)
+                            train_freq=15, use_sde=False, device=device, seed=seed, tensorboard_log="./tensorboard_log")
     elif transfer_type == 1:
         # TL without task description
         agent = SACMaster(env=env, policy='MlpPolicy', learning_rate=1e-4, batch_size=1024, tau=0.9, gamma=0.99, gradient_steps=10, 
                             train_freq=15, use_sde=False, policy_dir=policy_dir, experience_dir=experience_dir, 
-                            descriptions_dir=description_dir, ae_model=ae, k=k, similarity_thr=similarity_thr, device=device, seed=seed)
+                            descriptions_dir=description_dir, ae_model=ae, k=k, similarity_thr=similarity_thr, device=device, seed=seed, 
+                            tensorboard_log="./tensorboard_log")
     elif transfer_type == 2:
         # TL with task description
         agent = SACMaster(env=env, policy='MlpPolicy', learning_rate=1e-4, batch_size=1024, tau=0.9, gamma=0.99, gradient_steps=10, 
                             train_freq=15, use_sde=False, policy_dir=policy_dir, experience_dir=experience_dir, 
                             descriptions_dir=description_dir, ae_model=ae, k=k, similarity_thr=similarity_thr, task_description=task_description,
-                            tokenizer_str="bert-base-cased", device=device, seed=seed)
+                            tokenizer_str="bert-base-cased", device=device, seed=seed, tensorboard_log="./tensorboard_log")
 
     agent.learn(total_timesteps=total_timesteps, progress_bar=True,
                 callback=WandbCallback(
