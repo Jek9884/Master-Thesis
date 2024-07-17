@@ -65,12 +65,14 @@ def eval_moodel(test_env, agent, n_episodes):
         ('i', 'a'): 0,
     }
 
+    dist_list = []
     for video in tqdm(range(n_episodes)):
         done = truncated = False
         obs, info = test_env.reset(seed=video)
-        prev_pose = deepcopy(info["pose"])
+        prev_pos = deepcopy(info["position"])
         road_net = info["road"]
         distance = 0
+        dist = 0
         episode_length = 0
         passed_sections = 0
         n_actions = 0
@@ -87,7 +89,17 @@ def eval_moodel(test_env, agent, n_episodes):
             action, _states = agent.predict(obs)
             section_staying_counter[current_lane] += 1
             obs, reward, done, truncated, info = test_env.step(action)
-            distance += np.linalg.norm(prev_pose - info["pose"])
+            
+            # Compute distance
+            curr_pos = info['position']
+            if prev_pos is not None:
+                if info['speed'] >= 0:
+                    dist += np.linalg.norm(curr_pos - prev_pos)
+                else:
+                    dist -= np.linalg.norm(curr_pos - prev_pos)
+
+
+            distance += np.linalg.norm(prev_pos - curr_pos)
             episode_length += 1
             n_actions += 1
             current_lane = lane_edge_dict[info['current_lane']]
@@ -96,7 +108,10 @@ def eval_moodel(test_env, agent, n_episodes):
                 passed_sections += 1
                 per_sector_actions.append(n_actions)
                 n_actions = 0
-            prev_pose = deepcopy(info["pose"])
+            
+            prev_pos = copy(curr_pos)
+
+        dist_list.append(dist)
         all_passed_sections.append(passed_sections)  
         all_mean_dist_per_action.append(distance/episode_length)          
         section_passed_start_from[spawining_lane] += passed_sections
@@ -108,7 +123,7 @@ def eval_moodel(test_env, agent, n_episodes):
     for k, v in section_activated_skill.items():
         v /= section_staying_counter[k]
 
-    return all_mean_dist_per_action, section_staying_counter, section_activated_skill, section_passed_start_from, per_sector_actions, all_passed_sections
+    return all_mean_dist_per_action, section_staying_counter, section_activated_skill, section_passed_start_from, per_sector_actions, all_passed_sections, dist_list
 
 
 parser = argparse.ArgumentParser(description="Evaluate RL transfer")
@@ -163,7 +178,7 @@ for file in dir:
 
     agent = SACMaster.load(f"{models_path}/{file}")
     print(file)
-    all_mean_dist_per_action, section_staying_counter, section_activated_skill, section_passed_start_from, per_sector_actions, all_passed_sections = eval_moodel(env, agent, n_episodes)
+    all_mean_dist_per_action, section_staying_counter, section_activated_skill, section_passed_start_from, per_sector_actions, all_passed_sections, dist_list = eval_moodel(env, agent, n_episodes)
     res_dict = {
         'model': file,
         'all_mean_dist_per_action': all_mean_dist_per_action,
@@ -171,7 +186,8 @@ for file in dir:
         'section_activated_skill': section_activated_skill,
         'section_passed_start_from': section_passed_start_from,
         'per_section_actions': per_sector_actions,
-        'all_passed_sections': all_passed_sections
+        'all_passed_sections': all_passed_sections,
+        "dist_list": dist_list
     }
 
     res_list.append(res_dict)
