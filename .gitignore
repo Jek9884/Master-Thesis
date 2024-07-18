@@ -15,7 +15,6 @@ atari/similarity_dataset
 highway-env/dataset
 highway-env/subpolicies
 highway-env/final_model
-highway-env/HighwayEnv
 
 transfer_learning/transfer_dataset
 transfer_learning/__pycache__
