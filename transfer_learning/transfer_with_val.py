@@ -101,7 +101,10 @@ def main():
     similarity_thr = args.similarity_thr
 
     if transfer_type == 2:
-        task_description = "The ego-veichle is driving on a racetrack. The agent's objective is to follow the tracks while avoiding collisions with other vehicles."
+        #For racetrack
+        #task_description = "The ego-veichle is driving on a racetrack. The agent's objective is to follow the tracks while avoiding collisions with other vehicles."
+        #For indiana
+        task_description = "The ego-veichle is driving on a circuit. It is an oval circuit. The objective is to complete the track as fast as possible without touching the edges."
     else:
         task_description = None
 
@@ -116,14 +119,14 @@ def main():
     }
 
     wandb_run = wandb.init(
-        project="SAC_new_rew_transfer",
+        project="SAC_indiana_transfer",
         config=wandb_config,
         sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
         monitor_gym=True,  # auto-upload the videos of agents playing the game
         save_code=True,  # optional
     )
 
-    save_folder = "grid_res_new_rew_transfer"
+    save_folder = "grid_res_new_rew_complex_track"
 
     if not os.path.exists(f"./{save_folder}"):
         os.makedirs(save_folder)
@@ -135,25 +138,30 @@ def main():
         os.environ["CUDA_VISIBLE_DEVICES"] = device
         device = torch.device(0)
 
+    if env_name == "indiana-v0":
+        flag_indiana = True
+    else:
+        flag_indiana = False
+
     if transfer_type != 0:
         ae = HighwayEnvModel.load_from_checkpoint(ae_path)
 
     if transfer_type == 0:
         # Without transfer learning
         agent = SACMaster(env=env, policy='MlpPolicy', learning_rate=1e-3, batch_size=1024, tau=0.5, gamma=0.99, gradient_steps=10, 
-                            train_freq=15, use_sde=False, device=device, seed=seed, tensorboard_log="./tensorboard_log")
+                            train_freq=15, use_sde=False, device=device, seed=seed, tensorboard_log="./tensorboard_log", indiana=flag_indiana)
     elif transfer_type == 1:
         # TL without task description
         agent = SACMaster(env=env, policy='MlpPolicy', learning_rate=1e-3, batch_size=1024, tau=0.5, gamma=0.99, gradient_steps=10, 
                             train_freq=15, use_sde=False, policy_dir=policy_dir, experience_dir=experience_dir, 
                             descriptions_dir=description_dir, ae_model=ae, k=k, similarity_thr=similarity_thr, device=device, seed=seed, 
-                            tensorboard_log="./tensorboard_log")
+                            tensorboard_log="./tensorboard_log", indiana=flag_indiana)
     elif transfer_type == 2:
         # TL with task description
         agent = SACMaster(env=env, policy='MlpPolicy', learning_rate=1e-3, batch_size=1024, tau=0.5, gamma=0.99, gradient_steps=10, 
                             train_freq=15, use_sde=False, policy_dir=policy_dir, experience_dir=experience_dir, 
                             descriptions_dir=description_dir, ae_model=ae, k=k, similarity_thr=similarity_thr, task_description=task_description,
-                            tokenizer_str="bert-base-cased", device=device, seed=seed, tensorboard_log="./tensorboard_log")
+                            tokenizer_str="bert-base-cased", device=device, seed=seed, tensorboard_log="./tensorboard_log", indiana=flag_indiana)
 
     epochs = 10
     n_timesteps_per_epoch = int(total_timesteps/10)
