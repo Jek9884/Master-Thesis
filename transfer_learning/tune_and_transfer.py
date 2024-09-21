@@ -12,16 +12,20 @@ sys.path.insert(1, "../")
 from stable_baselines3.sac.sac import SACMaster
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
-from ae.imageAE.highway_model import HighwayEnvModel
 
 def dict_to_string(d):
     return '_'.join(str(value) for value in d.values())
 
 def trainable(config_dict):
-    
-    ae_model = HighwayEnvModel.load_from_checkpoint(config_dict["ae_path"])
 
-    path = "../../../../../../../../data/a.capurso/Master-Thesis/transfer_learning"
+    sys.path.insert(1, "../../../Master-Thesis/")
+    from ae.imageAE.highway_model import HighwayEnvModel
+
+    path = "/storagenfs/a.capurso1/Master-Thesis/transfer_learning"
+    ae_path = path + "/" + config_dict["ae_path"]
+
+    ae_model = HighwayEnvModel.load_from_checkpoint(ae_path)
+
     save_path = config_dict['save_path']
     config_dict.pop('save_path')
 
@@ -53,13 +57,11 @@ def trainable(config_dict):
     # Init env
     env = make_vec_env(config_dict['env_name'], n_envs=config_dict["n_envs"], env_kwargs={'config': config}, vec_env_cls=SubprocVecEnv)
 
-    # Without transfer learning
     agent = SACMaster(env=env, policy='MlpPolicy', learning_rate=config_dict['lr'], batch_size=1024, tau=config_dict['tau'], 
-                        gamma=config_dict['gamma'], gradient_steps=10, train_freq=15, use_sde=False, policy_dir=config_dict["policy_dir"], 
-                        experience_dir=config_dict["experience_dir"], descriptions_dir=config_dict["description_dir"], 
-                        ae_model=ae_model, k=config_dict["k"], similarity_thr=config_dict["similarity_thr"], device=config_dict["device"], 
-                        seed=config_dict['seed'], tensorboard_log=f"{path}/tensorboard_log")
-    
+                gamma=config_dict['gamma'], gradient_steps=10, train_freq=15, use_sde=False, policy_dir=path+"/"+config_dict["policy_dir"], 
+                experience_dir=path+"/"+config_dict["experience_dir"], descriptions_dir=path+"/"+config_dict["description_dir"], ae_model=ae_model, k=config_dict["k"], similarity_thr=config_dict["similarity_thr"], 
+                device=config_dict["device"], seed=config_dict['seed'], tensorboard_log=f"{path}/tensorboard_log")
+        
     agent.learn(total_timesteps=config_dict["total_timesteps"], progress_bar=True,
                 callback=WandbCallback(
                     gradient_save_freq=100,
@@ -78,7 +80,7 @@ parser = argparse.ArgumentParser(description="Train a RL agent with SAC algorith
 parser.add_argument("--env_name", type=str, help="Environment to use")
 parser.add_argument("--policy_dir", type=str, help="Path to the source policies")
 parser.add_argument("--experience_dir", type=str, help="Path to the source dataset")
-parser.add_argument("--description_dir", type=str, default=None, help="Path to the source tasks descriptions")
+parser.add_argument("--description_dir", type=str, help="Path to the source tasks descriptions")
 parser.add_argument("--ae_path", type=str, help="Path to the ae model")
 parser.add_argument("--device", type=str, help="Device where to execute")
 parser.add_argument("--n_envs", type=int, default=1, help="Number of environments to use in parallel")
